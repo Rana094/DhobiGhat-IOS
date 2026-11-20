@@ -1,8 +1,8 @@
 # DhobiGhat Viva Notes
 
-## Phase 4: what is implemented
+## Phase 5: what is implemented
 
-Fifteen app Swift files now describe Firebase authentication, Open-Meteo weather, drying recommendations, date selection, and the Add Plan sheet. Native Xcode project creation, Firebase SPM/configuration, build, and app tests remain pending because this workspace runs on Windows without Xcode or Swift. Phase 3 endpoint checks succeeded, but do not verify Swift parsing or UI. Fourteen XCTest methods are prepared across two test files; none have run here. Plan storage is not implemented. Phase 1 was not present; later phases were explicitly requested.
+Nineteen app Swift files now describe authentication, weather, recommendations, and Firestore laundry schedules. MainTabView owns a shared PlanViewModel; AddPlanView saves; MyPlansView fetches, completes, and deletes plans. A firestore.rules policy is supplied. Native Xcode/SPM/Firebase setup, rule publication, build, and live app tests remain pending on a Mac. The earlier weather probes do not verify Swift code. Twenty-one XCTest methods across three files are prepared but unexecuted. Phase 1 was not present; later phases were explicitly requested.
 
 ## Current app flow and important code
 
@@ -15,7 +15,7 @@ Fifteen app Swift files now describe Firebase authentication, Open-Meteo weather
 7. View modifiers set the font, color, alignment, padding, frame, background, and navigation title. The background is a faint blue produced by `opacity(0.06)`.
 8. `Color` and `.infinity` are native SwiftUI values. `frame(maxWidth:maxHeight:)` lets the content fill available space; `padding(24)` provides inner spacing.
 
-`NavigationStack` provides each screen's title. `Form` groups login/profile controls, `SecureField` masks the password, and `TabView` switches between Weather, My Plans, and Profile. Weather displays API results when configured and run; only plan management remains a placeholder. `body` is a computed property, not a stored screen image.
+`NavigationStack` provides screen titles. `Form` groups login/profile/plan inputs, `SecureField` masks the password, and `TabView` switches between Weather, My Plans, and Profile. Plan management is now backed by real SDK calls, with live behavior still unverified. `body` is a computed property, not a stored screen image.
 
 ## SwiftUI state concepts
 
@@ -25,10 +25,10 @@ The table separates current uses from wrappers/features still planned.
 | --- | --- | --- |
 | `@State` | View-owned local UI state that can trigger a refresh | Login inputs/mode; WeatherHomeView's Retry count, selectedDate, and sheet visibility; AddPlanView's unsaved note |
 | `@Binding` | Read/write access to state owned elsewhere | WeatherHomeView changes its parent's city; WeatherDayCard and AddPlanView change WeatherHomeView's selectedDate |
-| `ObservableObject` | Protocol for reference types that notify SwiftUI about changes | AuthViewModel and WeatherViewModel import Combine; plan model later |
-| `@Published` | Publishes changes to properties of an observable object | Auth properties plus weather days, loading, errors, and city name |
-| `@StateObject` | Creates and preserves an observable object for the owning view's lifetime | Root owns auth; WeatherHomeView owns weather; main tabs will own plans later |
-| `@ObservedObject` | Observes an object supplied by another owner | My Plans receives the existing plan ViewModel |
+| `ObservableObject` | Protocol for reference types that notify SwiftUI about changes | AuthViewModel, WeatherViewModel, and PlanViewModel import Combine |
+| `@Published` | Publishes changes to properties of an observable object | Auth/weather properties plus plans, loading, saving, and plan errors |
+| `@StateObject` | Creates and preserves an observable object for the owning view's lifetime | Root owns auth, WeatherHomeView owns weather, MainTabView owns plans |
+| `@ObservedObject` | Observes an object supplied by another owner | MyPlansView, WeatherHomeView, and AddPlanView observe the same shared PlanViewModel |
 | `@EnvironmentObject` | Reads a shared observable object injected by an ancestor | Implemented: LoginView and ProfileView read auth after root injects it |
 | `@AppStorage` | Connects a simple preference in UserDefaults to SwiftUI | MainTabView remembers selectedCity across launches and passes it to Profile |
 
@@ -59,11 +59,11 @@ Firebase is not connected or tested here. README gives exact steps for adding th
 
 The ViewModel's stored properties do not call Firebase during initialization. `startListening()` runs from root's task and checks `FirebaseApp.app()` before calling Auth. This matters because calling `Auth.auth()` without a configured default app can fail. A missing/invalid or wrong-bundle plist leaves Firebase unconfigured and displays setup instructions. Restart the app after correcting configuration.
 
-The SDK persists the secure authenticated session, not our own Boolean flag. On relaunch, root waits for the first state-listener callback before choosing a login or main screen. The main tabs use `.id(user.uid)`, giving a different account a new view identity. This prepares the view boundary for future account-specific state; future plan listeners still need their own cleanup. A cached session does not prove every future server request will be accepted.
+The SDK persists the secure authenticated session, not our own Boolean flag. On relaunch, root waits for the first state-listener callback before choosing a login or main screen. The main tabs use `.id(user.uid)`, giving a different account a new view identity and PlanViewModel. Plans use one-time requests with account checks, so no Firestore snapshot listeners need cleanup. A cached session does not prove every future server request will be accepted.
 
-Firebase Authentication handles email/password sign-in and provides an authenticated user's UID. `currentUser` is the actual SDK User, and `userEmail` is a UI copy of its email. Passwords remain local to the form/request and must not be stored in Firestore or UserDefaults. The future Firestore phase will store laundry plans under `users/{userUID}/plans/{planID}`. Authentication identifies the user; security rules determine whether the request may access a document. Hiding another user's plans in the UI alone is not access control.
+Firebase Authentication handles email/password sign-in and provides an authenticated user's UID. `currentUser` is the actual SDK User, and `userEmail` is a UI copy of its email. Passwords remain local to the form/request and must not be stored in Firestore or UserDefaults. PlanService now targets `users/{userUID}/plans/{planID}`. Authentication identifies the user; security rules determine whether a request may access a document. Hiding another user's plans in the UI alone is not access control.
 
-Rules must require a signed-in user whose UID matches the path's UID. The plan model must clear old plans and stop old account listeners/tasks on sign-out or account changes so one account's state cannot appear in another session. Session restoration and actual rule behavior will need runtime verification later.
+The supplied rules require a signed-in UID matching the path. The plan model clears old state and rejects old async results on account changes. Session restoration, these state transitions, and rule behavior still need runtime verification.
 
 ## Phase 3 networking and JSON concepts
 
@@ -148,8 +148,62 @@ These are **basic project-defined guidelines, not guaranteed drying predictions*
 - `canPlanLaundry` requires no active loading, no weather error, a match between the loaded city and picker city, and a selectedDate that exists in the current forecast. If any condition is false, Plan Laundry is disabled.
 - New city/retry loads clear selectedDate and close the sheet. The city-change handler also clears selection immediately, so a previous city's date cannot open the form while the next request begins.
 - `.sheet(isPresented: $showAddPlan)` opens AddPlanView, passing the selected city, current forecast dates, and a binding to selectedDate. Its Picker can change the parent date; the matching weather card is highlighted after closing.
-- The optional note belongs only to AddPlanView's local @State. `@Environment(\.dismiss)` provides the native action used by Close. No initializer tricks or extra ViewModel are needed for this unsaved form.
-- The form explicitly states saving is unavailable. Closing does not create a plan or persist the note. Firestore saving and My Plans remain for the next relevant phase.
+- The optional note is local @State until Save submits its value. `@Environment(\.dismiss)` supplies the native action used by Cancel and by successful saving. The form observes the PlanViewModel owned by MainTabView rather than making another one.
+- Phase 5 adds Save plan and Cancel. Before Save, Cancel discards the local note without a write. Once Save submits a Firestore write, Cancel only closes the sheet; it cannot retract that already-submitted operation. The pending-state text explains this.
+
+## Phase 5 Firestore data mapping
+
+Firestore stores collections of documents. The path `users/{userUID}/plans/{planID}` uses Firebase Authentication's actual UID as the owner and an auto-generated document ID as the plan ID. Email is not the path key. A parent user document may have no fields while its plans subcollection exists.
+
+LaundryPlan is a simple struct. Its initializer receives the document ID and `[String: Any]` data. Checked `as?` casts read city/date/note as String, isCompleted as Bool, and createdAt as Timestamp. Missing or invalid values throw PlanError.invalidData; they are not silently skipped or replaced with defaults. id is document metadata, not an extra stored field. isCompleted is var so a server-confirmed completion can update the displayed item.
+
+No Firestore Codable mapper is used. Dictionary keys are the literal field names in the requirements, which makes the mapping easy to explain. The ordinary Decodable API models remain specific to weather JSON.
+
+`LaundryPlan.isValidDate` configures DateFormatter with en_US_POSIX locale, Gregorian calendar, Asia/Dhaka timezone, `yyyy-MM-dd`, and non-lenient parsing. It requires ten characters and a successful round trip so invalid dates or alternate formatting are rejected. Dates copied from the weather API are kept as calendar strings. createdAt is an absolute Timestamp supplied by the server; it is not the laundry date and is not a timezone-formatted String.
+
+### PlanService functions
+
+- `plansCollection(userUID:)` first verifies Firebase initialization and that the current authenticated UID matches the supplied owner. It then creates the exact nested collection reference. No Firestore singleton is accessed in a ViewModel constructor before Firebase is configured.
+- `addPlan(...)` validates supported city/date and builds the five-field dictionary. isCompleted starts false. FieldValue.serverTimestamp() asks the server to fill createdAt; it is a transform placeholder, not a hardcoded local Timestamp. `try await addDocument(data:)` waits for acknowledgment or rejection.
+- `fetchPlans(...)` performs `getDocuments(source: .server)` once, maps each document using the model initializer, and sorts newest-first by createdAt. There is no real-time snapshot listener, custom repository, or composite index. A malformed document produces a visible error rather than silently disappearing from the list.
+- `completePlan(...)` validates the document ID, then awaits `updateData(["isCompleted": true])`. It changes only status; it does not recreate the plan or its creation time.
+- `deletePlan(...)` validates the ID and awaits document.delete(). The UI asks for confirmation first.
+
+### PlanViewModel and account isolation
+
+MainTabView owns one PlanViewModel using @StateObject. MyPlansView and the add form use @ObservedObject, so saving and listing share the same observable plans/loading/errors. Main tabs load when authenticated, and My Plans can fetch on appearance or pull-to-refresh.
+
+`setUser` clears plans and operation/error state whenever the UID changes or the main UI disappears. It also changes accountID, a local UUID that represents this instance's account session. Each async operation captures both UID and accountID. After awaiting, `isCurrentAccount` checks the captured token, the model's UID, and Firebase's current user before accepting data or errors. Old results cannot populate the new account's list. `finishLoading` also checks the captured token so an old operation cannot reset a new account's spinner. Root's `.id(user.uid)` independently gives each account a fresh MainTabView/PlanViewModel.
+
+The service UID check prevents ordinary accidental cross-account calls; server rules enforce access even if a modified client bypasses that check. These are implementation safeguards, not a claimed verified isolation test. Real A/B account and rule tests are pending.
+
+`isLoading` serializes reads/writes; `isSaving` identifies an active add operation. Guards run before the first await, so repeated Save tasks do not create multiple active writes in the same model. Disabled buttons reflect this state. The sheet also verifies that the chosen date is in its actual forecast-date list.
+
+After an acknowledged write, the ViewModel fetches plans again. Completion/deletion also update the confirmed local item. `refreshAfterWrite` handles the follow-up read separately: a failed refresh says the write succeeded but the list could not refresh. The form treats an acknowledged save as success even if the later read fails, so it does not invite an accidental duplicate Save.
+
+Errors use FirestoreErrorCode.Code for permission denied, unavailable/deadline exceeded, unauthenticated, not found, and setup failures, plus a visible fallback. My Plans displays a retry action, an empty state only when not loading/erroring, and Pending/Completed labels. New plan entry and list actions are disabled while a plan operation is active.
+
+### Offline writes and Cancel
+
+Server-only reads do not fall back to cached data, so offline reads surface an SDK error. An offline Firestore write can instead remain queued: its async completion is not server success until acknowledged. The UI says it is waiting, and the shared busy state blocks another Save. Cancel closes the form and does not cancel the submitted SDK write. The operation may finish later or after the SDK resumes it following an app restart; users should inspect My Plans/Console before creating another plan. No custom timeout pretends that a still-queued write failed, and no exactly-once guarantee across restarts is claimed.
+
+### Every security-rule condition
+
+- `request.auth != null`: the request must be authenticated.
+- `request.auth.uid == userUID`: the caller must own the UID appearing in the path. A different user and an anonymous request fail before accessing plan data.
+- `hasAll` and `hasOnly`: creation/updated documents must contain exactly city, date, note, isCompleted, and createdAt. The ID remains in the path.
+- Type checks require String/String/String/Bool/Timestamp. City must be one of the three supported names; date must have yyyy-MM-dd text shape. The app additionally checks that it is a real calendar date.
+- Creation requires isCompleted false and createdAt equal to request.time; the server timestamp transform satisfies the latter condition when committed.
+- Updates require affectedKeys().hasOnly(['isCompleted']) and the resulting status true. Other fields stay unchanged; this phase does not support editing notes/dates or undoing completion. A repeat true status is harmless.
+- Read/delete only need the owner condition, so the owner can delete a document even if its other fields are malformed. Unmatched paths have no allow rule and are denied. A broad overlapping allow-all policy must not remain alongside these rules.
+
+Firebase Console administrator editing bypasses these client rules; seeing a document in Console alone does not prove security. README explains publishing the exact file, checking own/different/anonymous requests in Rules Playground, and testing actual CRUD with two accounts. No rules were published or executed here.
+
+### Phase 5 verification status
+
+Tests/LaundryPlanTests.swift adds seven non-network XCTest methods covering all five data fields plus ID, empty note/completed status, missing fields, wrong types, strict dates/leap years, unsupported city/empty ID, and invalid stored date. All three test files are prepared but unexecuted. Live Save/reopen/retrieve/complete/delete, Console verification, account isolation, permission denial, and network states are all pending. No database action is reported successful from source inspection.
+
+Official references: [Firestore writes](https://firebase.google.com/docs/firestore/manage-data/add-data), [one-time queries](https://firebase.google.com/docs/reference/swift/firebasefirestore/api/reference/Classes/Query), [document write completion](https://firebase.google.com/docs/reference/swift/firebasefirestore/api/reference/Classes/DocumentReference), and [rule field validation](https://firebase.google.com/docs/firestore/security/rules-fields).
 
 ## Common viva questions
 
@@ -179,7 +233,7 @@ These are **basic project-defined guidelines, not guaranteed drying predictions*
 
 **What happens when login fails?** The request throws, the ViewModel publishes a helpful message, loading ends through `defer`, and the login form remains visible. Main tabs require an actual Firebase user.
 
-**Is FirebaseFirestore used already?** It is a required package product to attach during setup, but this phase makes no Firestore calls. Database operations and security rules remain for the plan-storage phase.
+**Is FirebaseFirestore used already?** The source now uses the official SDK for add, server fetch, completion, and deletion. The SDK still needs to be linked in Xcode, and real database/rules setup and live tests are pending.
 
 **Why not use zero for missing rain data?** Zero predicts no precipitation. Missing data means we do not know; substituting zero could mislead the user and future recommendations.
 
@@ -197,8 +251,14 @@ These are **basic project-defined guidelines, not guaranteed drying predictions*
 
 **What is shared through the date binding?** The same String state owned by WeatherHomeView. Cards and the sheet can read and update it; they do not create separate selected dates.
 
-**Does Plan Laundry save anything in this phase?** It opens the real form with city/date and an optional note. The form says saving is unavailable; there is no pretend save or Firestore write.
+**Does Plan Laundry save anything in this phase?** It opens the form. Save plan submits the actual Firestore write and automatically closes only after acknowledgment. Cancel before submission creates nothing; after submission it cannot retract the write.
 
-**What should be tested on a Mac next?** Create the native target, attach Firebase and real configuration, build/run, and run both XCTest files. Verify recommendations/colors, selecting each forecast date, disabling Plan Laundry without a valid date, sheet values/date edits, city-change reset, and the existing auth/weather flows. README records expected results; app tests remain pending.
+**Why not store the user's email in the path?** The authenticated UID is stable and matches request.auth.uid in security rules. Email may change.
+
+**Why use a server timestamp?** It records when Firestore commits creation using server time, and avoids trusting the device clock for createdAt.
+
+**Why no real-time plan listener?** The project needs straightforward one-time reads and explicit refresh after writes. That is enough for this phase and keeps cleanup easy.
+
+**What should be tested on a Mac next?** Create the target, link Firebase, add real configuration, create the database and publish rules, build/run, and run all three XCTest files. Verify every CRUD action and restart retrieval in Console, two-account isolation, denied rules, network loss, pending writes, and the existing auth/weather/recommendation UI. All app/security tests remain pending.
 
 Official study references: [Firebase setup](https://firebase.google.com/docs/ios/setup), [email/password authentication](https://firebase.google.com/docs/auth/ios/password-auth), [session listeners](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Classes/Auth.html), and [error codes](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Enums/AuthErrorCode).

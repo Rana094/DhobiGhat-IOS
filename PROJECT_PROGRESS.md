@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 4 - Drying recommendations, forecast-date selection, and Add Plan sheet source implemented; native build, XCTest, and app checks pending on a Mac.** Updated 2026-11-20 (Asia/Dhaka).
+**Phase 5 - Firestore laundry-plan CRUD, account-scoped state, screens, and rules implemented in source; native setup, deployed rules, build, XCTest, and live checks pending.** Updated 2026-11-20 (Asia/Dhaka).
 
 ## Project conventions
 
@@ -23,6 +23,7 @@ The complete pasted master instructions were read before this phase. Initial wor
 - Phase 3 source: three supported cities, direct Decodable models, safe daily-array conversion, native URLSession requests, observable weather state, picker/cards, loading/errors/retry/empty states, persisted city, and protection against old city responses.
 - Phase 3 live endpoint checks: all three cities returned HTTP 200 with three days; an invalid-field request returned HTTP 400. These are external HTTP checks, not execution of the Swift app.
 - Phase 4 source: small if/else recommendation function, Good/Risky/Avoid colors, Unavailable handling, selected forecast date, Plan Laundry, and a native AddPlanView sheet receiving city/date. Plan saving remains deferred.
+- Phase 5 source: LaundryPlan, PlanService, shared PlanViewModel, actual Save/Cancel form, My Plans retrieval/completion/deletion, one-time server reads after writes, account-result guards, errors, and owner-only firestore.rules. No live Firestore result is claimed.
 
 ## Current project structure and files created
 
@@ -32,6 +33,7 @@ IOS project/
   README.md
   PROJECT_PROGRESS.md
   VIVA_NOTES.md
+  firestore.rules
   DhobiGhat/
     App/
       AppDelegate.swift
@@ -40,6 +42,7 @@ IOS project/
       City.swift
       WeatherResponse.swift
       WeatherDay.swift
+      LaundryPlan.swift
       .gitkeep
     Views/
       RootView.swift
@@ -49,18 +52,22 @@ IOS project/
       WeatherHomeView.swift
       WeatherDayCard.swift
       AddPlanView.swift
+      MyPlansView.swift
     ViewModels/
       AuthViewModel.swift
       WeatherViewModel.swift
+      PlanViewModel.swift
       .gitkeep
     Services/
       WeatherService.swift
+      PlanService.swift
       .gitkeep
     Resources/
       .gitkeep
   Tests/
     WeatherServiceTests.swift
     DryingRecommendationTests.swift
+    LaundryPlanTests.swift
 ```
 
 Phase 0 created the original scaffold and expanded README. Phase 2 changes:
@@ -100,6 +107,20 @@ Phase 4 files created/modified:
 - Updated README with Phase 4 scope/setup/acceptance checks and VIVA_NOTES with every rule branch, expected outcomes, and the date/sheet state flow.
 - No changes to Firebase, network requests, JSON conversion, or weather ViewModel behavior. No packages, scoring system, machine learning, fake forecasts, or plan persistence were added.
 
+Phase 5 files created/modified:
+
+- Created `Models/LaundryPlan.swift`: document ID plus the five typed fields, explicit dictionary mapping, and strict Gregorian yyyy-MM-dd date validation using Asia/Dhaka.
+- Created `Services/PlanService.swift`: authenticated UID-scoped addDocument, server-only one-time fetch, updateData for completion, and delete. Creation uses FieldValue.serverTimestamp(). No eager Firebase initialization, repository, real-time plan listener, or Codable mapper.
+- Created `ViewModels/PlanViewModel.swift`: ObservableObject/@Published plans/loading/saving/errors; clears state on account changes, validates account tokens and Firebase UID after awaits, serializes operations, and refreshes after acknowledged writes. Separates successful writes from failed follow-up refreshes.
+- Created `Views/MyPlansView.swift`: List, loading/error/retry/empty states, city/date/note, Pending/Completed, mark completed, Delete confirmation alert, one-time fetch, and pull-to-refresh.
+- Modified `Views/MainTabView.swift`: owns the single PlanViewModel using @StateObject, binds it to auth UID, clears it when leaving main UI, and passes it to Weather/My Plans.
+- Modified `Views/WeatherHomeView.swift`: passes the shared plan model to the sheet and disables new plan entry during an active plan operation; all existing weather/recommendation/date behavior is preserved.
+- Modified `Views/AddPlanView.swift`: @ObservedObject model, Save plan/Cancel, waiting state, inline errors, current forecast-date validation, duplicate-submission guard through the model, and dismissal after acknowledged save. Cancel does not retract an already-submitted SDK write, as explained in the UI.
+- Created `firestore.rules`: owner-only nested plan paths, exact field/type checks, supported city/date text format, pending creation with server timestamp, completion-only updates, and default deny elsewhere. Not deployed or executed here.
+- Created `Tests/LaundryPlanTests.swift`: seven prepared non-network methods for dictionary mapping/types, missing fields, empty note/status, strict dates/leap years, invalid city/ID, and invalid stored date. Not compiled/run.
+- Updated README with database/rule setup, Rules Playground checks, offline behavior, and all pending CRUD/account tests; updated VIVA_NOTES with mapping, SDK calls, property wrappers, account isolation, rules, and limitations.
+- No new packages, Firebase products, backend, Storage, Realtime Database, fake plans, or changes to real authentication/weather integrations.
+
 ## Toolchain and project settings
 
 | Check | Actual status |
@@ -126,7 +147,19 @@ No packages or project generators were installed. The required SDK cannot be att
 - Friendly errors cover incorrect credentials (including enumeration-protection behavior), duplicate email, weak passwords, network failures, disabled accounts, disabled provider, rate limits, invalid configuration, keychain failures, and a visible fallback.
 - Official SPM repository: `https://github.com/firebase/firebase-ios-sdk`. Required products: `FirebaseAuth` and `FirebaseFirestore`, attached to the DhobiGhat target. Attachment, package resolution, and SDK version selection are **pending** because no native project exists here.
 - No real `GoogleService-Info.plist`, Firebase Console registration, provider enablement, or live connectivity has been verified. README provides precise steps, including target membership and app Info configuration.
-- No Firestore reads/writes, database creation, or security rules are part of this phase. The future plan-storage phase still needs UID-scoped paths, owner-only rules, and listener/task cleanup.
+- Phase 5 implements real Firestore operations using the already-required FirebaseFirestore product. No database has been created and no rules have been published from this workspace. All CRUD, server persistence, account isolation, permission denial, and offline app tests remain pending.
+
+## Firestore implementation status
+
+- Collection path: users/{authenticated Firebase UID}/plans/{auto-generated document ID}; email is never the path key.
+- Exact stored fields: city/date/note Strings, isCompleted Bool, createdAt server Timestamp. The model reads the ID from document metadata. Note is optional in the form but stored as an empty String when omitted.
+- Dates stay as Asia/Dhaka forecast strings, validated with an en_US_POSIX Gregorian DateFormatter and a strict yyyy-MM-dd round trip. Historical saved dates remain valid; they are not converted to UTC or restricted to today's three forecasts when reading.
+- Fetch uses getDocuments(source: .server), then explicit checked dictionary mapping and newest-first in-memory sorting. No custom index or real-time Firestore listener is needed. Invalid documents produce an error rather than invented fields or silent skipping.
+- Completion uses updateData([isCompleted: true]); deletion uses delete(). Every acknowledged write triggers a server fetch. A failed follow-up fetch is reported separately from the acknowledged write, preventing an automatic duplicate save. Confirmed completion/deletion also update the current local item.
+- MainTabView owns one @StateObject PlanViewModel; MyPlansView, WeatherHomeView, and AddPlanView use @ObservedObject. Auth UID changes and main UI removal clear plans/loading/errors and change an account token. Captured UID/token plus Firebase's current UID must match before results/errors are published. Root's existing .id(user.uid) gives a fresh model per account.
+- isLoading guards all concurrent plan operations; isSaving marks an add request and disables repeat Save/inputs. New sheet entry is also blocked while the model is busy. Empty, permission-denied, unavailable, unauthenticated, and other error states have visible handling.
+- Firestore may keep an offline write queued awaiting server confirmation. The UI exposes that waiting state. Cancel closes the sheet but cannot cancel an already-submitted write, which may settle later, including after SDK restart. No early success or exactly-once-across-restarts guarantee is made.
+- Rules require matching authenticated owner for read/delete; valid typed pending creation with request.time timestamp; and completion-only updates. No broad fallback allow is supplied. Rule publication and owner/non-owner/anonymous tests are pending.
 
 ## Weather API status
 
@@ -141,19 +174,22 @@ No packages or project generators were installed. The required SDK cannot be att
 - Initial restricted probes failed DNS resolution; the same read-only requests succeeded outside that sandbox. This host restriction was not an iOS offline test.
 - Phase 4 now computes recommendations from the fetched measurements and allows selection of a returned date. It requires all three rule inputs to be usable and never substitutes zero for unavailable data. Missing temperature alone does not prevent a recommendation because temperature is not in the rules.
 - Avoid >=60% or >=3 mm is checked first; otherwise Risky >=30% or >=1 mm or >=30 km/h; otherwise Good. Labels use red/orange/green, with gray Unavailable. These are project-defined guidelines, not guaranteed drying predictions.
-- City/retry/new-load changes clear the selection. Plan Laundry requires a selected date in the current city's successful loaded forecast, and opens the actual AddPlanView sheet. The form can select any returned forecast date and accepts an unsaved note. Firestore saving remains deferred.
+- City/retry/new-load changes clear the selection. Plan Laundry requires a selected date in the current city's loaded forecast and no active plan operation. The sheet can select any returned forecast date and now submits its optional note with a real Firestore Save.
 
 ## Compilation and test status
 
 - Reviewed the seven Swift source files against official Firebase setup, Auth APIs, and error-code documentation. Reviewed startup order, observable state ownership, listener lifecycle, async loading cleanup, password handling, and root routing. These are source reviews, not compiler or runtime tests.
 - Phase 2 local checks passed: one `@main` across seven Swift files; no trailing whitespace in the seven Swift files and three documentation files; `git diff --check` passed. Source searches found no custom credential persistence, suppressed `try` errors, forced casts, emulator calls, or premature Firestore operations. Only normal LF-to-CRLF notices were emitted by Git. These checks do not establish Swift syntax/type correctness or successful authentication.
 - No Swift compiler, Apple SDK type checking, `xcodebuild`, automated iOS tests, Simulator, or device run was available. **Build and launch are not verified.** Source inspection is not compilation.
-- Registration, login, incorrect credentials, logout, session restoration, UI reaction, validation/error behavior, and account switching: **all Firebase live tests pending**. Firestore is unimplemented and untested.
+- Registration, login, incorrect credentials, logout, session restoration, UI reaction, validation/error behavior, and account switching: **all Firebase live tests pending**. Firestore source is now implemented, but no live action or rule execution is verified.
 - Phase 3 endpoint checks above passed. Swift JSON decoding, prepared XCTest execution, city-switch/retry/offline UI, remembered city, and app build/launch are **pending**. No compiler or iOS test success is claimed.
 - Phase 3 local checks passed: 14 app Swift files and one @main; seven XCTest methods prepared; no trailing whitespace or old app name across 18 source/test/documentation files; git diff --check passed. Nine syntactically valid synthetic JSON fixture payloads were checked with Python's JSON parser, including deliberately incompatible field types for Swift decoding tests. This was fixture syntax validation only, not Swift JSONDecoder or XCTest execution.
 - Phase 4 review: traced the five requested outcomes (Good/Risky/Avoid/Avoid/Risky), inclusive thresholds and Avoid priority; reviewed missing-data handling, date bindings, button validity, selection reset, and sheet payload. These are source reviews, not executed Swift tests.
 - Phase 4 XCTest and UI checks remain pending. Seven new XCTest methods are prepared in addition to Phase 3's seven. No test pass or Simulator run is claimed.
 - Phase 4 final local checks passed: 15 app Swift files, two XCTest files, one @main, and seven new recommendation methods containing 28 assertions. Whitespace and app-name checks passed across 20 source/test/documentation files; git diff --check passed. These are file/content checks, not compilation or executed XCTest.
+- Phase 5 source review covers the schema/path, initialization guards, async CRUD, account/result boundaries, busy-state guards, refresh failures, offline confirmation, form/list wiring, and owner-only policy. This is not a runtime or security test.
+- Phase 5 model tests are prepared. Build, all 21 XCTest methods, rule compilation/publication, Save, restart retrieval, completion, deletion, Console evidence, two-account access, permission errors, and unavailable-network app tests are **pending**. No Firebase Console configuration or credentials were supplied.
+- Phase 5 final local checks passed: 19 app Swift files, three XCTest files with 21 prepared methods, and one @main; no trailing whitespace or old app name across 26 source/test/documentation/rules files; git diff --check passed. Source searches found no Firestore snapshot listener, Storage/Realtime Database import, forced try/cast, or suppressed try error. These are static source/file reviews, not a Swift build, rules compiler check, or runtime test.
 
 ## Known bugs and limitations
 
@@ -161,20 +197,23 @@ No packages or project generators were installed. The required SDK cannot be att
 - The `.xcodeproj` and iOS app target do not exist yet. The scaffold cannot currently be opened as an app project or launched.
 - Resources currently contain only a folder placeholder. The native template's asset catalog must be added during Mac setup.
 - Auth source cannot compile until the official Firebase products are added to a real target. No `canImport` fallback or simulated login hides this missing dependency.
-- Weather, recommendations, and date/form selection source now exist. The sheet explicitly cannot save; closing discards its local note and creates no plan. Firestore saving, My Plans, and remaining state wrappers are deferred. Phase 1 was not available and has not been silently re-created.
+- Weather, recommendations, and full plan CRUD source now exist, but the app is not verified runnable. Native project, SDK resolution, real Firebase config, database, and rule deployment are still required. Phase 1 was not available and has not been silently re-created.
 - Actual Firebase behavior, package compatibility, Swift concurrency compilation, and session restoration require a Mac build and configured runtime tests.
+- Server-only plan reads require connectivity. An offline submitted write may remain pending; a dismissed sheet does not cancel it. Duplicate taps are blocked in the current model, but this phase does not add durable idempotency across application restarts. Inspect server results after reconnecting.
+- A malformed existing document blocks a strict list mapping and requires correction/removal in Console; the app does not silently hide invalid records. Rules check date text shape, while the app additionally checks calendar validity.
 
 ## Manual actions required
 
-Follow README's native project, Firebase setup, and Phase 3/4 feature/test sections:
+Follow README's native project, Firebase setup, and Phase 5 Firestore setup/verification sections:
 
-1. Create the native DhobiGhat iOS App project; include all 15 app Swift files under DhobiGhat and the template asset catalog in its app target. AddPlanView.swift is the only new Phase 4 app file. Keep Tests out of the app target.
+1. Create the native DhobiGhat iOS App project; include all 19 app Swift files and the template asset catalog in its app target. New Phase 5 files are LaundryPlan, PlanService, PlanViewModel, and MyPlansView. Keep Tests and firestore.rules out of app source/resource membership.
 2. Add the official Firebase SPM repository and attach only `FirebaseAuth` and `FirebaseFirestore`. Resolve a stable SDK compatible with your installed Xcode and keep the actual package resolution file.
 3. Register the exact Xcode bundle ID as an iOS app in Firebase Console and enable Email/Password authentication.
 4. Download the real `GoogleService-Info.plist`, add it to DhobiGhat/Resources with app target membership and bundle inclusion, and verify the bundle ID matches.
 5. Add the Boolean app Info key `FirebaseAppDelegateProxyEnabled = NO` as described by official SwiftUI setup.
-6. Create the DhobiGhatTests XCTest target with DhobiGhat as host; add both WeatherServiceTests.swift and DryingRecommendationTests.swift only to that target and run Product > Test.
-7. Build/run README's auth/weather checks plus Phase 4 selection, colors, unavailable data, disabled-button behavior, city reset, sheet city/date, and changed sheet-date highlight. Confirm Close creates no saved plan. Record actual results rather than marking tests passed from source inspection.
+6. Create the Firestore Standard/Native (default) database in the same Firebase project; publish the exact firestore.rules policy without an overlapping allow-all rule. README includes Console steps and Rules Playground checks. No CLI install is needed.
+7. Create the DhobiGhatTests XCTest target with DhobiGhat as host; add WeatherServiceTests, DryingRecommendationTests, and LaundryPlanTests only to that target, then Product > Test.
+8. Build/run every README auth/weather/recommendation/Firestore check. Verify Save, reopen/retrieve, complete, delete, Console field types, A/B account separation, denied cross-account rules, permission failure, network loss, and pending-write behavior. Record actual outcomes and errors.
 
 Before marking native Phase 0 checks complete, record:
 
@@ -183,10 +222,11 @@ Before marking native Phase 0 checks complete, record:
 - Confirmation that Xcode recognizes `DhobiGhat.xcodeproj` and its DhobiGhat iOS application target/scheme.
 - Selected Simulator/device and OS version.
 - Resolved Firebase SDK version and the two linked products.
+- Firestore database/project selection, rule publication result, and Rules Playground owner/non-owner/anonymous results.
 - Build result, launch result, XCTest result, and each live auth/weather app test result, including errors.
 
 ## Next implementation steps
 
 1. Finish the manual native/SPM/Firebase setup and verification above when a Mac is available.
-2. Stop after Phase 4 and wait for the next explicit phase instruction.
+2. Stop after Phase 5 and wait for the next explicit phase instruction.
 3. Before the next phase, inspect existing files and reread this progress record. Keep code beginner-friendly, use the requested MVVM/state ownership, and preserve real working functionality.

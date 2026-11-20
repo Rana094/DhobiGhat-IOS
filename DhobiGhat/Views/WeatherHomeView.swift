@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WeatherHomeView: View {
     @Binding var selectedCity: String
+    @ObservedObject var plans: PlanViewModel
     @StateObject private var weather = WeatherViewModel()
     @State private var retryCount = 0
     @State private var selectedDate = ""
@@ -12,7 +13,7 @@ struct WeatherHomeView: View {
     }
 
     private var canPlanLaundry: Bool {
-        !weather.isLoading && weather.errorMessage == nil && weather.cityName == city.name
+        !weather.isLoading && !plans.isLoading && weather.errorMessage == nil && weather.cityName == city.name
             && weather.days.contains(where: { $0.date == selectedDate })
     }
 
@@ -111,7 +112,8 @@ struct WeatherHomeView: View {
             AddPlanView(
                 city: city.name,
                 forecastDates: weather.days.map { $0.date },
-                selectedDate: $selectedDate
+                selectedDate: $selectedDate,
+                plans: plans
             )
         }
     }

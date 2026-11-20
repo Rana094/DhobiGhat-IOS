@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userUID) {
+      return request.auth != null && request.auth.uid == userUID;
+    }
+
+    function validPlan() {
+      let plan = request.resource.data;
+      return plan.keys().hasAll(['city', 'date', 'note', 'isCompleted', 'createdAt'])
+        && plan.keys().hasOnly(['city', 'date', 'note', 'isCompleted', 'createdAt'])
+        && plan.city is string
+        && plan.city in ['Khulna', 'Dhaka', 'Chattogram']
+        && plan.date is string
+        && plan.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && plan.note is string
+        && plan.isCompleted is bool
+        && plan.createdAt is timestamp;
+    }
+
+    match /users/{userUID}/plans/{planID} {
+      allow read, delete: if isOwner(userUID);
+      allow create: if isOwner(userUID) && validPlan()
+        && request.resource.data.isCompleted == false
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner(userUID) && validPlan()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isCompleted'])
+        && request.resource.data.isCompleted == true;
+    }
+  }
+}
