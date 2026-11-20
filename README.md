@@ -2,20 +2,20 @@
 
 A beginner-level SwiftUI mini-project for a Mobile Computing Lab. The planned app helps students choose laundry days using real weather forecasts.
 
-## Phase 0 status
+## Phase 2 status
 
-Only the source scaffold and documentation are prepared. No working app or Xcode project existed to preserve. Git's baseline contained a one-line starter README headed `DhobiGhat-IOS`; this README expands it for the requested DhobiGhat project.
+Phase 2 adds source for real Firebase email/password authentication, session observation, input/error handling, login/register UI, authenticated tabs, and profile/logout. The welcome content is preserved in the Weather tab. Weather and plan tabs are clearly marked as future features; they do not show fake data.
 
 This workspace is on Windows. `xcodebuild`, `xcrun`, and `swift` were not found on PATH. No native Xcode tools were available to create a project or app target. There is **no `.xcodeproj`, configured app target, verified build, or verified launch yet**. Follow the Mac setup below to create the project using Xcode's native App template.
 
-No dependencies have been installed. Authentication, Firestore, and weather requests are not implemented. The initial screen contains no sample weather or saved plans.
+No dependencies have been resolved or attached to a target here because there is no Xcode project. The code imports the actual Firebase SDK and needs the SPM setup below to compile. `GoogleService-Info.plist` has not been supplied. **Firebase is not connected or live-tested.** Firestore operations and weather requests are not implemented. Phase 1 was not present in the workspace; Phase 2 proceeds at the user's explicit request without claiming Phase 1 completion.
 
 ## Requirements
 
 - A Mac running a compatible Xcode, with an iOS Simulator runtime or a supported iPhone.
 - Swift and SwiftUI; intended minimum deployment target: **iOS 17.0**. Use a newer supported minimum only if your installed Xcode requires it, and record the actual value in `PROJECT_PROGRESS.md`.
 - Use Xcode's default Swift language version initially. No `SWIFT_VERSION` or deployment setting exists until the native project is created. Record both compiler version and target Swift language version afterward; these are different settings.
-- Later phases require the official Firebase Apple SDK (Authentication and Cloud Firestore) and Open-Meteo via native `URLSession`, `JSONDecoder`, and `Decodable`/`Codable`.
+- Phase 2 requires the official Firebase Apple SDK (`FirebaseAuth` and `FirebaseFirestore`). A later phase adds Open-Meteo via native `URLSession`, `JSONDecoder`, and `Decodable`/`Codable`.
 - Simple MVVM with `ObservableObject` and `@Published`; do not replace these with `@Observable`.
 - No separate backend, third-party UI/networking libraries, dependency injection framework, or project generator.
 - No location permission or GPS is needed.
@@ -30,12 +30,17 @@ IOS project/
   VIVA_NOTES.md
   DhobiGhat/
     App/
+      AppDelegate.swift
       DhobiGhatApp.swift
     Models/
       .gitkeep
     Views/
       RootView.swift
+      LoginView.swift
+      MainTabView.swift
+      ProfileView.swift
     ViewModels/
+      AuthViewModel.swift
       .gitkeep
     Services/
       .gitkeep
@@ -43,10 +48,10 @@ IOS project/
       .gitkeep
 ```
 
-- `App`: SwiftUI entry point and, when needed later, Firebase startup.
+- `App`: SwiftUI entry point and Firebase startup in AppDelegate.
 - `Models`: simple data structs, added in later phases.
-- `Views`: SwiftUI screens. `RootView` is currently a static welcome screen.
-- `ViewModels`: future observable state and screen logic.
+- `Views`: root session routing, login/register form, authenticated tabs, and profile/logout.
+- `ViewModels`: `AuthViewModel` owns Firebase session state and auth operations.
 - `Services`: future API and Firestore operations.
 - `Resources`: future asset catalog and Firebase configuration.
 - `.gitkeep`: empty file that lets Git preserve an otherwise empty folder. It is not Swift code and does not need target membership.
@@ -67,8 +72,8 @@ These steps keep the prepared source files and use Xcode to generate its own pro
 9. Select the blue project icon, then **TARGETS > DhobiGhat**. Confirm it is an iOS application target. Under **General > Minimum Deployments**, set iOS to **17.0**, or the supported newer minimum required by your Xcode. Under **Build Settings**, search for **Swift Language Version** and record its default. The iOS deployment value also appears under **iOS Deployment Target**.
 10. Check source membership. There must be exactly one app entry point, `DhobiGhatApp`, and `RootView` must belong to the same target. For traditional groups, check **Build Phases > Compile Sources**. With synchronized folders, Xcode can include files automatically; use the File inspector to confirm membership and avoid adding duplicate source entries. Resolve any remaining missing asset reference by referencing `DhobiGhat/Resources/Assets.xcassets`.
 11. Select scheme **DhobiGhat** and an installed **iPhone Simulator** in the toolbar. Use a Simulator runtime at or above the minimum deployment version. If no runtime is installed, use Xcode's Settings component/platform downloads to install one.
-12. Choose **Product > Build** (`Command-B`), then **Product > Run** (`Command-R`). Expected screen: the title `DhobiGhat`, a blue water drop, and the laundry planner introduction. This is a static scaffold only.
-13. Record the actual Xcode version, Swift compiler version, Swift language setting, deployment target, Simulator/device, and build/run result in `PROJECT_PROGRESS.md`. Keep the generated `.xcodeproj` and asset catalog in the repository for the next phase.
+12. Complete the Phase 2 Firebase setup below before building; the source now imports Firebase modules. Choose **Product > Build** (`Command-B`), then **Product > Run** (`Command-R`). With a valid configuration, expect a brief session check followed by the login/register screen or authenticated tabs. Without a bundled matching plist, expect the Firebase setup message, with no Auth calls made.
+13. Record the actual Xcode version, Swift compiler version, Swift language setting, deployment target, Simulator/device, and build/run result in `PROJECT_PROGRESS.md`. Keep the generated `.xcodeproj`, asset catalog, and SPM resolution file in the repository for the next phase.
 
 For an iPhone, select your own development team under **Signing & Capabilities**, use your own unique bundle identifier, connect the device, and select it as the run destination. Simulator validation is sufficient for Phase 0.
 
@@ -89,9 +94,65 @@ xcodebuild -project DhobiGhat.xcodeproj -scheme DhobiGhat -sdk iphonesimulator -
 
 Confirm `SWIFT_VERSION` and `IPHONEOS_DEPLOYMENT_TARGET` in the settings output. A command-line build alone does not verify launch; run the app in Xcode as described above.
 
-## Planned functionality and constraints
+## Phase 2 Firebase setup on a Mac
 
-These are requirements for later phases, not completed features.
+### Add the official SDK with Swift Package Manager
+
+1. Create/open the native `DhobiGhat.xcodeproj` using the instructions above. Confirm all seven Swift files belong to the **DhobiGhat** app target.
+2. Choose **File > Add Package Dependencies** (called **Add Packages** in some Xcode versions).
+3. Enter the official repository: [firebase/firebase-ios-sdk](https://github.com/firebase/firebase-ios-sdk).
+4. Select a stable release compatible with the installed Xcode, using **Up to Next Major Version** from that release. Check the SDK's current toolchain requirements in the [official setup guide](https://firebase.google.com/docs/ios/setup) before resolving it; do not select the development branch. Retain iOS 17.0 as the minimum unless the actual toolchain requires a higher supported minimum.
+5. Add exactly **FirebaseAuth** and **FirebaseFirestore**, both to the **DhobiGhat** target. `FirebaseCore` is a transitive dependency used by initialization. Do not select Analytics, Google Sign-In, Storage, or other products.
+6. Wait for package resolution to finish. Under the project **Package Dependencies**, confirm the Firebase SDK appears. Under the app target's **General > Frameworks, Libraries, and Embedded Content**, confirm both selected products are linked.
+7. Keep the generated project changes and `Package.resolved` so the resolved version can be reproduced. Do not edit the Firebase SDK's own `Package.swift` and do not add a standalone Swift package to represent this iOS app.
+
+These steps are pending: no target or package metadata exists here to edit, and this Windows environment cannot resolve or build the Apple SDK.
+
+### Register DhobiGhat in Firebase Console
+
+1. In Xcode, select **TARGETS > DhobiGhat > General** and copy the actual **Bundle Identifier**. Use your own identifier; no identifier is supplied or invented in this repository.
+2. Open [Firebase Console](https://console.firebase.google.com/). Create a project named **DhobiGhat**, or select your existing project. Google Analytics is optional and is not needed for this phase.
+3. In the project overview, choose **Add app > iOS+**. Paste the exact bundle identifier from Xcode, including its case. Set the optional app nickname to **DhobiGhat**. An App Store ID is not needed for a lab/Simulator app. Click **Register app**.
+4. Download **GoogleService-Info.plist**. Use the downloaded configuration for this registered iOS app, not another Firebase project or platform. Keep the exact filename without a suffix such as `(1)`.
+5. In Firebase Console, open **Build > Authentication** (some Console layouts use **Security > Authentication**), choose **Get started**, then **Sign-in method > Email/Password**. Enable **Email/Password**, leave email-link sign-in disabled, and save.
+6. Use Firebase's default minimum six-character password policy for the initial lab tests. If you configure a stronger policy, registration errors from Firebase will explain that a stronger password is required. Keep email enumeration protection enabled; incorrect-email and incorrect-password errors share one user-facing message.
+
+### Add the plist to the correct app target
+
+1. In Xcode, use **File > Add Files to "DhobiGhat"** to add the downloaded file into **DhobiGhat/Resources/**. Choose to copy it into the repository if it is still in Downloads. Select **DhobiGhat** in **Add to targets**.
+2. Select the plist in the navigator and confirm **Target Membership: DhobiGhat** in the File inspector. In a synchronized folder, membership may be automatic; confirm the file is included for this app target.
+3. For traditional groups, check **TARGETS > DhobiGhat > Build Phases > Copy Bundle Resources**. The plist must appear once. For synchronized folders, resources may be included automatically. The result must be a bundled file named `GoogleService-Info.plist` accessible through `Bundle.main`, rather than a file merely visible in Finder.
+4. Confirm the plist's `BUNDLE_ID` matches the target's bundle identifier. If it does not, register the correct iOS app and download its configuration; do not fabricate or patch project identifiers in the plist.
+5. Following Firebase's SwiftUI setup instructions, add **FirebaseAppDelegateProxyEnabled** under the app target's **Info > Custom iOS Target Properties**, with type **Boolean** and value **NO**. This is an app Info setting, not a key in `GoogleService-Info.plist`. Email/password authentication needs no notification or redirect handlers.
+6. Build and restart the app. `AppDelegate` checks the bundled file and bundle ID, then calls `FirebaseApp.configure()` during `didFinishLaunchingWithOptions`. Root's task starts the listener afterward; the ViewModel checks `FirebaseApp.app()` before creating `Auth.auth()`.
+
+If the setup screen remains visible, check the Xcode console for the missing/invalid plist or bundle ID message, correct target membership, then stop and rerun the app. Configuration must be tested; adding a file alone does not prove that Firebase is connected.
+
+### Phase 2 acceptance tests - all pending
+
+After setup, run on a Simulator or iPhone with internet access. Use a real test email account you control. Do not record the password in this repository.
+
+| Test | Steps and expected result | Status here |
+| --- | --- | --- |
+| Register | Choose Create account, enter an unused email and password of at least six characters; authenticated tabs appear and the user appears under Firebase Authentication > Users | Pending |
+| Log out | Profile shows the signed-in email; Log out returns to the login screen | Pending |
+| Log in | Enter the newly registered email/password; authenticated tabs appear with the matching profile email | Pending |
+| Invalid credentials | Log out and try a wrong password or unregistered email; show the shared credential error and remain at login | Pending |
+| Validation | Try blank/invalid email, empty password, and a registration password below six characters; show the corresponding input message | Pending |
+| Duplicate email | Try registering the existing email; show a helpful Firebase error | Pending |
+| Session restoration | Log in, terminate the app without signing out, relaunch on the same installation; wait for the initial listener and show authenticated tabs without retyping credentials | Pending |
+| Persisted logout | Log out, terminate, relaunch; stay on the login screen | Pending |
+| Account changes | Log out of A and log into B; profile must show B; tabs are recreated using B's UID | Pending |
+| Failed request | From login, disconnect internet and submit valid-format credentials; when the SDK request fails, show the network error and allow retry | Pending |
+| Missing config | Temporarily exclude the plist from the target, rebuild and run; show setup instructions without calling Auth; restore membership afterward | Pending |
+
+The SDK maintains its session securely; the app does not store passwords, tokens, or a fake login flag in UserDefaults or Firestore. The listener's initial callback handles restored state. An offline cached session is not a guarantee that the server will authorize every future request.
+
+Official references: [password authentication](https://firebase.google.com/docs/auth/ios/password-auth), [user/session observation](https://firebase.google.com/docs/auth/ios/manage-users), [Auth API](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Classes/Auth.html), and [auth error codes](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Enums/AuthErrorCode).
+
+## Full project requirements
+
+This is the full project scope. Only authentication source and the tab shell have been added in Phase 2; live acceptance remains pending.
 
 - Email/password registration, login, restored sessions, useful authentication errors, and logout.
 - Authentication before the main **Weather**, **My Plans**, and **Profile** tabs.
@@ -116,11 +177,11 @@ These are requirements for later phases, not completed features.
 
 Sign-out and account switching must clear account-specific plan state. Introduce property wrappers when their real features are added, not solely for demonstration.
 
-### Firebase requirements for later phases
+### Firestore requirements for later phases
 
 Use only Authentication and Cloud Firestore. Store plans at `users/{userUID}/plans/{planID}`, using the authenticated UID rather than email. Fields: `city: String`, `date: String` in `yyyy-MM-dd`, `note: String`, `isCompleted: Bool`, and `createdAt: Timestamp`. Security rules must restrict access to the matching authenticated UID.
 
-`GoogleService-Info.plist` is absent and Firebase is not configured. When the Firebase phase is requested, create/select your Firebase Console project, register an iOS app with the actual Xcode bundle identifier, and download its real `GoogleService-Info.plist`. Add it through Xcode with DhobiGhat target membership and bundle resource inclusion. Add only the official Firebase Authentication and Firestore SDK products, enable email/password sign-in, create Firestore, and deploy owner-only rules in that phase. No invented configuration values and no Firebase packages or setup are needed for Phase 0.
+The Phase 2 package setup includes the Firestore product as requested, but there are no Firestore calls or plan data yet. Create Firestore and deploy owner-only security rules when the plan-storage phase is requested. Authentication alone does not secure future Firestore data.
 
 ### Open-Meteo requirements for later phases
 
@@ -144,4 +205,4 @@ These rules are not scientific guarantees.
 
 Always use **DhobiGhat** as the app name. Before each phase, inspect the workspace and read `PROJECT_PROGRESS.md`. Preserve working code, modify only what that phase needs, review source, run available checks, and report limitations honestly. Update `PROJECT_PROGRESS.md` and `VIVA_NOTES.md` after each phase, explain manual steps and concepts, provide one meaningful commit message, then stop for the next instruction.
 
-Phase 0 stops here. Await Phase 1 before implementing any feature or integration.
+Stop after Phase 2 and await the next explicit phase instruction. Native project/SPM setup and all live authentication checks above remain pending.

@@ -1,25 +1,31 @@
 import SwiftUI
 
 struct RootView: View {
+    @StateObject private var auth = AuthViewModel()
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Image(systemName: "drop.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue)
-
-                Text("Smart Laundry Day Planner")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-
-                Text("Choose a suitable day to wash and dry your clothes.")
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+        ZStack {
+            if let setupError = auth.setupError {
+                ContentUnavailableView(
+                    "Firebase setup needed",
+                    systemImage: "gearshape",
+                    description: Text(setupError)
+                )
+            } else if auth.isCheckingSession {
+                ProgressView("Checking your session…")
+            } else if let user = auth.currentUser {
+                MainTabView()
+                    .id(user.uid)
+            } else {
+                LoginView()
             }
-            .padding(24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.blue.opacity(0.06))
-            .navigationTitle("DhobiGhat")
+        }
+        .environmentObject(auth)
+        .task {
+            auth.startListening()
+        }
+        .onDisappear {
+            auth.stopListening()
         }
     }
 }
