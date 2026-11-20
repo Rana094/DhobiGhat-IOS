@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 3 - Weather API and JSON parsing source implemented; live HTTP endpoints verified; native build, Swift tests, and app checks pending on a Mac.** Updated 2026-11-20 (Asia/Dhaka).
+**Phase 4 - Drying recommendations, forecast-date selection, and Add Plan sheet source implemented; native build, XCTest, and app checks pending on a Mac.** Updated 2026-11-20 (Asia/Dhaka).
 
 ## Project conventions
 
@@ -22,6 +22,7 @@ The complete pasted master instructions were read before this phase. Initial wor
 - Phase 2 package attachment and live acceptance tests remain pending. No connected or tested Firebase deployment is claimed.
 - Phase 3 source: three supported cities, direct Decodable models, safe daily-array conversion, native URLSession requests, observable weather state, picker/cards, loading/errors/retry/empty states, persisted city, and protection against old city responses.
 - Phase 3 live endpoint checks: all three cities returned HTTP 200 with three days; an invalid-field request returned HTTP 400. These are external HTTP checks, not execution of the Swift app.
+- Phase 4 source: small if/else recommendation function, Good/Risky/Avoid colors, Unavailable handling, selected forecast date, Plan Laundry, and a native AddPlanView sheet receiving city/date. Plan saving remains deferred.
 
 ## Current project structure and files created
 
@@ -47,6 +48,7 @@ IOS project/
       ProfileView.swift
       WeatherHomeView.swift
       WeatherDayCard.swift
+      AddPlanView.swift
     ViewModels/
       AuthViewModel.swift
       WeatherViewModel.swift
@@ -58,6 +60,7 @@ IOS project/
       .gitkeep
   Tests/
     WeatherServiceTests.swift
+    DryingRecommendationTests.swift
 ```
 
 Phase 0 created the original scaffold and expanded README. Phase 2 changes:
@@ -86,6 +89,16 @@ Phase 3 files created/modified:
 - Created `Tests/WeatherServiceTests.swift`: seven XCTest methods with synthetic JSON for URL parameters, normal decoding, optional/unequal arrays, missing dates, date alignment, the three-day limit, and malformed/wrong-type JSON. Prepared, not run.
 - Updated README with weather behavior, endpoint evidence, XCTest setup, and manual checks; updated VIVA_NOTES with networking/JSON/state explanations.
 - Preserved Phase 2 auth and root routing. No fake login, weather package, artificial forecast values, drying rules, or plan storage was added.
+
+Phase 4 files created/modified:
+
+- Modified `Models/WeatherDay.swift`: added dryingRecommendation() and a three-case String enum in the same file. Missing, non-finite, or invalid rule inputs yield nil/Unavailable. Avoid is evaluated before Risky, then Good. Temperature is not part of the rules.
+- Modified `Views/WeatherDayCard.swift`: recommendation text/colors, date selection through @Binding, selected outline/checkmark, and accessibility selection indication. Existing metric rows are preserved.
+- Modified `Views/WeatherHomeView.swift`: @State selectedDate/sheet visibility, date bindings to cards/form, current-forecast validation for Plan Laundry, selection reset on city/new request, and the project-guideline disclaimer.
+- Created `Views/AddPlanView.swift`: city, current forecast-date Picker using the parent's binding, optional local @State note, Close using the environment dismiss action, and an explicit no-saving message.
+- Created `Tests/DryingRecommendationTests.swift`: seven methods/28 assertions for the requested five examples, exact boundaries, Avoid priority, missing inputs, and invalid/non-finite values. Prepared, not executed.
+- Updated README with Phase 4 scope/setup/acceptance checks and VIVA_NOTES with every rule branch, expected outcomes, and the date/sheet state flow.
+- No changes to Firebase, network requests, JSON conversion, or weather ViewModel behavior. No packages, scoring system, machine learning, fake forecasts, or plan persistence were added.
 
 ## Toolchain and project settings
 
@@ -126,7 +139,9 @@ No packages or project generators were installed. The required SDK cannot be att
 - Live checks on 2026-11-20 (Asia/Dhaka), from Python outside the restricted network sandbox: **Khulna HTTP 200; Dhaka HTTP 200; Chattogram HTTP 200**. Each returned `Asia/Dhaka`, dates **2026-11-20 through 2026-11-22**, three entries per required array, and the requested units. This does not prove Swift URLSession/JSONDecoder or UI behavior.
 - Negative endpoint check: an intentionally invalid daily field returned **HTTP 400** with an error reason.
 - Initial restricted probes failed DNS resolution; the same read-only requests succeeded outside that sandbox. This host restriction was not an iOS offline test.
-- Drying recommendations, plan-date selection, and Firestore are deferred.
+- Phase 4 now computes recommendations from the fetched measurements and allows selection of a returned date. It requires all three rule inputs to be usable and never substitutes zero for unavailable data. Missing temperature alone does not prevent a recommendation because temperature is not in the rules.
+- Avoid >=60% or >=3 mm is checked first; otherwise Risky >=30% or >=1 mm or >=30 km/h; otherwise Good. Labels use red/orange/green, with gray Unavailable. These are project-defined guidelines, not guaranteed drying predictions.
+- City/retry/new-load changes clear the selection. Plan Laundry requires a selected date in the current city's successful loaded forecast, and opens the actual AddPlanView sheet. The form can select any returned forecast date and accepts an unsaved note. Firestore saving remains deferred.
 
 ## Compilation and test status
 
@@ -136,6 +151,9 @@ No packages or project generators were installed. The required SDK cannot be att
 - Registration, login, incorrect credentials, logout, session restoration, UI reaction, validation/error behavior, and account switching: **all Firebase live tests pending**. Firestore is unimplemented and untested.
 - Phase 3 endpoint checks above passed. Swift JSON decoding, prepared XCTest execution, city-switch/retry/offline UI, remembered city, and app build/launch are **pending**. No compiler or iOS test success is claimed.
 - Phase 3 local checks passed: 14 app Swift files and one @main; seven XCTest methods prepared; no trailing whitespace or old app name across 18 source/test/documentation files; git diff --check passed. Nine syntactically valid synthetic JSON fixture payloads were checked with Python's JSON parser, including deliberately incompatible field types for Swift decoding tests. This was fixture syntax validation only, not Swift JSONDecoder or XCTest execution.
+- Phase 4 review: traced the five requested outcomes (Good/Risky/Avoid/Avoid/Risky), inclusive thresholds and Avoid priority; reviewed missing-data handling, date bindings, button validity, selection reset, and sheet payload. These are source reviews, not executed Swift tests.
+- Phase 4 XCTest and UI checks remain pending. Seven new XCTest methods are prepared in addition to Phase 3's seven. No test pass or Simulator run is claimed.
+- Phase 4 final local checks passed: 15 app Swift files, two XCTest files, one @main, and seven new recommendation methods containing 28 assertions. Whitespace and app-name checks passed across 20 source/test/documentation files; git diff --check passed. These are file/content checks, not compilation or executed XCTest.
 
 ## Known bugs and limitations
 
@@ -143,20 +161,20 @@ No packages or project generators were installed. The required SDK cannot be att
 - The `.xcodeproj` and iOS app target do not exist yet. The scaffold cannot currently be opened as an app project or launched.
 - Resources currently contain only a folder placeholder. The native template's asset catalog must be added during Mac setup.
 - Auth source cannot compile until the official Firebase products are added to a real target. No `canImport` fallback or simulated login hides this missing dependency.
-- Weather and city-selection source now exist. Plan management, recommendations, plan-date selection, and remaining state wrappers are deferred. Phase 1 was not available and has not been silently re-created.
+- Weather, recommendations, and date/form selection source now exist. The sheet explicitly cannot save; closing discards its local note and creates no plan. Firestore saving, My Plans, and remaining state wrappers are deferred. Phase 1 was not available and has not been silently re-created.
 - Actual Firebase behavior, package compatibility, Swift concurrency compilation, and session restoration require a Mac build and configured runtime tests.
 
 ## Manual actions required
 
-Follow README's native project, Firebase setup, and Phase 3 weather/test sections:
+Follow README's native project, Firebase setup, and Phase 3/4 feature/test sections:
 
-1. Create the native DhobiGhat iOS App project; include all 14 app Swift files under DhobiGhat and the template asset catalog in its app target. Keep Tests out of the app target.
+1. Create the native DhobiGhat iOS App project; include all 15 app Swift files under DhobiGhat and the template asset catalog in its app target. AddPlanView.swift is the only new Phase 4 app file. Keep Tests out of the app target.
 2. Add the official Firebase SPM repository and attach only `FirebaseAuth` and `FirebaseFirestore`. Resolve a stable SDK compatible with your installed Xcode and keep the actual package resolution file.
 3. Register the exact Xcode bundle ID as an iOS app in Firebase Console and enable Email/Password authentication.
 4. Download the real `GoogleService-Info.plist`, add it to DhobiGhat/Resources with app target membership and bundle inclusion, and verify the bundle ID matches.
 5. Add the Boolean app Info key `FirebaseAppDelegateProxyEnabled = NO` as described by official SwiftUI setup.
-6. Create the DhobiGhatTests XCTest target with DhobiGhat as host; add Tests/WeatherServiceTests.swift only to the test target and run Product > Test.
-7. Build/run all README auth/weather acceptance tests, including fast city switching on a slow connection, disconnect/retry, and city restoration/Profile display. Record actual results rather than marking tests passed from source inspection.
+6. Create the DhobiGhatTests XCTest target with DhobiGhat as host; add both WeatherServiceTests.swift and DryingRecommendationTests.swift only to that target and run Product > Test.
+7. Build/run README's auth/weather checks plus Phase 4 selection, colors, unavailable data, disabled-button behavior, city reset, sheet city/date, and changed sheet-date highlight. Confirm Close creates no saved plan. Record actual results rather than marking tests passed from source inspection.
 
 Before marking native Phase 0 checks complete, record:
 
@@ -170,5 +188,5 @@ Before marking native Phase 0 checks complete, record:
 ## Next implementation steps
 
 1. Finish the manual native/SPM/Firebase setup and verification above when a Mac is available.
-2. Stop after Phase 3 and wait for the next explicit phase instruction.
+2. Stop after Phase 4 and wait for the next explicit phase instruction.
 3. Before the next phase, inspect existing files and reread this progress record. Keep code beginner-friendly, use the requested MVVM/state ownership, and preserve real working functionality.

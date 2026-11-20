@@ -1,8 +1,8 @@
 # DhobiGhat Viva Notes
 
-## Phase 3: what is implemented
+## Phase 4: what is implemented
 
-Fourteen app Swift files now describe Firebase authentication and Open-Meteo weather. Native Xcode project creation, Firebase SPM/configuration, build, and app tests remain pending because this workspace runs on Windows without Xcode or Swift. Direct checks of all three city endpoints returned HTTP 200 with three days; these do not verify the Swift parser or UI. Seven XCTest methods are prepared but not run. Plan storage and drying recommendations are unimplemented. Phase 1 was not present; later phases were explicitly requested.
+Fifteen app Swift files now describe Firebase authentication, Open-Meteo weather, drying recommendations, date selection, and the Add Plan sheet. Native Xcode project creation, Firebase SPM/configuration, build, and app tests remain pending because this workspace runs on Windows without Xcode or Swift. Phase 3 endpoint checks succeeded, but do not verify Swift parsing or UI. Fourteen XCTest methods are prepared across two test files; none have run here. Plan storage is not implemented. Phase 1 was not present; later phases were explicitly requested.
 
 ## Current app flow and important code
 
@@ -23,8 +23,8 @@ The table separates current uses from wrappers/features still planned.
 
 | Concept | Meaning | Current or planned meaningful use |
 | --- | --- | --- |
-| `@State` | View-owned local UI state that can trigger a refresh | Login inputs/mode and WeatherHomeView's Retry count; forecast date and sheet later |
-| `@Binding` | Read/write access to state owned elsewhere | WeatherHomeView reads/changes MainTabView's city; `$selectedCity` passes the binding; date selection later |
+| `@State` | View-owned local UI state that can trigger a refresh | Login inputs/mode; WeatherHomeView's Retry count, selectedDate, and sheet visibility; AddPlanView's unsaved note |
+| `@Binding` | Read/write access to state owned elsewhere | WeatherHomeView changes its parent's city; WeatherDayCard and AddPlanView change WeatherHomeView's selectedDate |
 | `ObservableObject` | Protocol for reference types that notify SwiftUI about changes | AuthViewModel and WeatherViewModel import Combine; plan model later |
 | `@Published` | Publishes changes to properties of an observable object | Auth properties plus weather days, loading, errors, and city name |
 | `@StateObject` | Creates and preserves an observable object for the owning view's lifetime | Root owns auth; WeatherHomeView owns weather; main tabs will own plans later |
@@ -108,9 +108,48 @@ Tests/WeatherServiceTests.swift contains seven XCTest methods with labelled synt
 
 API reference: [Open-Meteo forecast documentation](https://open-meteo.com/en/docs).
 
-## Planned drying recommendation function
+## Phase 4 drying recommendation function: every branch
 
-Apply Avoid first: rain probability >= 60% or precipitation >= 3 mm. Otherwise apply Risky: probability >= 30%, precipitation >= 1 mm, or wind >= 30 km/h. Otherwise return Good. A windy day with heavy rain still returns Avoid because that condition is checked first. These are project heuristics, not scientific guarantees. This function is not implemented yet.
+`WeatherDay.dryingRecommendation()` is a short model function. It returns `DryingRecommendation?`, where the enum has exactly three named cases: Good, Risky, Avoid. A nil result means **Unavailable**, rather than a fourth weather rating. The enum's String raw values provide the readable labels. No API call, machine learning, score, or temperature rule is involved.
+
+1. **Missing-input guard:** `guard let rainProbability, let precipitation, let windSpeed else { return nil }`. All three rule inputs must exist. If any is missing, the function stops with Unavailable, even if another known value is high. This deliberately avoids presenting a complete assessment from incomplete inputs. Temperature is not a rule input, so missing temperature alone does not prevent a recommendation.
+2. **Non-finite check:** if any input is NaN or infinity, return nil. `isFinite` checks that a Double is an ordinary finite number. `!` means not; `||` means at least one condition is true.
+3. **Valid-range check:** if rain probability is below 0 or above 100, or precipitation/wind is negative, return nil. Such values are unusable for these rules. Zero is valid and is never treated as missing.
+4. **Avoid branch:** if rain probability **>= 60** OR precipitation **>= 3**, return Avoid immediately. Either condition is sufficient; wind does not override this result. The `>=` operator includes the exact threshold.
+5. **Risky branch:** the `else if` is reached only when Avoid was false. If probability **>= 30** OR precipitation **>= 1** OR wind **>= 30**, return Risky. Any one of these conditions is sufficient. A day meeting both Avoid and Risky conditions still returns Avoid because the first branch already returned.
+6. **Good branch:** the final `else` means all input checks passed and neither earlier rule matched. Return Good. This means probability is below 30%, precipitation below 1 mm, and wind below 30 km/h; it does not guarantee clothes will dry.
+
+The function stays with the simple WeatherDay model so the view only displays the result. WeatherDayCard's color switch returns green for Good, orange for Risky, red for Avoid, and secondary gray for nil. The readable text remains visible so the label does not depend on color alone.
+
+These are **basic project-defined guidelines, not guaranteed drying predictions**. The Weather screen states this explicitly. The thresholds are the project's rules, not scientific advice.
+
+### Required examples and exact boundaries
+
+| Rain probability (%) | Precipitation (mm) | Wind (km/h) | Expected |
+| --- | --- | --- | --- |
+| 10 | 0 | 12 | Good |
+| 40 | 0 | 15 | Risky |
+| 70 | 0 | 10 | Avoid |
+| 10 | 5 | 10 | Avoid |
+| 10 | 0 | 35 | Risky |
+
+- Rain probability: 29.99 -> Good; 30 -> Risky; 59.99 -> Risky; 60 -> Avoid, with precipitation 0 and wind 12.
+- Precipitation: 0.99 -> Good; 1 -> Risky; 2.99 -> Risky; 3 -> Avoid, with rain probability 10 and wind 12.
+- Wind: 29.99 -> Good; 30 -> Risky, with rain probability 10 and precipitation 0.
+- Priority: probability 60 with wind 35 is Avoid; probability 40 with precipitation 3 and wind 35 is also Avoid.
+
+`Tests/DryingRecommendationTests.swift` has seven methods and 28 assertions for the five examples, boundaries, Avoid priority, missing inputs, invalid ranges, NaN, and infinity. These use synthetic rule inputs, not live forecasts. The helper creates a WeatherDay and calls the actual Swift function. Tests are prepared and source-reviewed, not executed; Swift/Xcode are unavailable here.
+
+### Date selection and the Add Plan sheet
+
+- WeatherHomeView owns `selectedDate` as @State. An empty string means no date is selected yet. It also owns `showAddPlan` as @State to control presentation.
+- Each WeatherDayCard receives `$selectedDate` as @Binding. Tapping a card sets the parent's value to that day's actual forecast date. A matching date gets a blue outline, checkmark, and selected accessibility trait. The other cards lose their highlight, so exactly one date is selected.
+- Any returned date can be chosen, including Avoid or Unavailable days. The recommendation informs the choice rather than blocking it. No missing or invented date is offered.
+- `canPlanLaundry` requires no active loading, no weather error, a match between the loaded city and picker city, and a selectedDate that exists in the current forecast. If any condition is false, Plan Laundry is disabled.
+- New city/retry loads clear selectedDate and close the sheet. The city-change handler also clears selection immediately, so a previous city's date cannot open the form while the next request begins.
+- `.sheet(isPresented: $showAddPlan)` opens AddPlanView, passing the selected city, current forecast dates, and a binding to selectedDate. Its Picker can change the parent date; the matching weather card is highlighted after closing.
+- The optional note belongs only to AddPlanView's local @State. `@Environment(\.dismiss)` provides the native action used by Close. No initializer tricks or extra ViewModel are needed for this unsaved form.
+- The form explicitly states saving is unavailable. Closing does not create a plan or persist the note. Firestore saving and My Plans remain for the next relevant phase.
 
 ## Common viva questions
 
@@ -152,6 +191,14 @@ Apply Avoid first: rain probability >= 60% or precipitation >= 3 mm. Otherwise a
 
 **Why is rain probability Double?** Direct numerical decoding accepts integers and fractions without a custom parser; the card displays the value with a percent unit.
 
-**What should be tested on a Mac next?** Create the native target, attach Firebase and real configuration, build/run, and run XCTest. Verify auth flows, three weather cities, rapid switching, offline/retry, missing values, and remembered city. README records expected results; app tests remain pending.
+**Why check Avoid before Risky?** A high-rain day also satisfies the lower Risky threshold. Checking Avoid first prevents it from being misclassified as Risky.
+
+**Does Good promise dry clothes?** No. These rules use three forecast measurements and are only project-defined guidelines. The UI states that drying predictions are not guaranteed.
+
+**What is shared through the date binding?** The same String state owned by WeatherHomeView. Cards and the sheet can read and update it; they do not create separate selected dates.
+
+**Does Plan Laundry save anything in this phase?** It opens the real form with city/date and an optional note. The form says saving is unavailable; there is no pretend save or Firestore write.
+
+**What should be tested on a Mac next?** Create the native target, attach Firebase and real configuration, build/run, and run both XCTest files. Verify recommendations/colors, selecting each forecast date, disabling Plan Laundry without a valid date, sheet values/date edits, city-change reset, and the existing auth/weather flows. README records expected results; app tests remain pending.
 
 Official study references: [Firebase setup](https://firebase.google.com/docs/ios/setup), [email/password authentication](https://firebase.google.com/docs/auth/ios/password-auth), [session listeners](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Classes/Auth.html), and [error codes](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Enums/AuthErrorCode).

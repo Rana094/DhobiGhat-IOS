@@ -4,9 +4,16 @@ struct WeatherHomeView: View {
     @Binding var selectedCity: String
     @StateObject private var weather = WeatherViewModel()
     @State private var retryCount = 0
+    @State private var selectedDate = ""
+    @State private var showAddPlan = false
 
     private var city: City {
         City.cities.first { $0.name == selectedCity } ?? City.khulna
+    }
+
+    private var canPlanLaundry: Bool {
+        !weather.isLoading && weather.errorMessage == nil && weather.cityName == city.name
+            && weather.days.contains(where: { $0.date == selectedDate })
     }
 
     var body: some View {
@@ -28,6 +35,10 @@ struct WeatherHomeView: View {
                         .fontWeight(.semibold)
 
                     Text("Dates follow Bangladesh time.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Text("Drying recommendations are basic project-defined guidelines, not guaranteed drying predictions.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -60,9 +71,21 @@ struct WeatherHomeView: View {
                         }
 
                         ForEach(weather.days) { day in
-                            WeatherDayCard(day: day)
+                            WeatherDayCard(day: day, selectedDate: $selectedDate)
                         }
                     }
+
+                    if selectedDate.isEmpty {
+                        Text("Select a forecast date to plan your laundry.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("Plan Laundry") {
+                        showAddPlan = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!canPlanLaundry)
 
                     if let url = URL(string: "https://open-meteo.com/") {
                         Link("Weather data: Open-Meteo", destination: url)
@@ -75,7 +98,21 @@ struct WeatherHomeView: View {
             .navigationTitle("DhobiGhat")
         }
         .task(id: "\(selectedCity)-\(retryCount)") {
+            guard !Task.isCancelled else { return }
+            selectedDate = ""
+            showAddPlan = false
             await weather.loadWeather(for: city)
+        }
+        .onChange(of: selectedCity) {
+            selectedDate = ""
+            showAddPlan = false
+        }
+        .sheet(isPresented: $showAddPlan) {
+            AddPlanView(
+                city: city.name,
+                forecastDates: weather.days.map { $0.date },
+                selectedDate: $selectedDate
+            )
         }
     }
 }

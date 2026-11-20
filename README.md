@@ -2,9 +2,9 @@
 
 A beginner-level SwiftUI mini-project for a Mobile Computing Lab. The planned app helps students choose laundry days using real weather forecasts.
 
-## Phase 3 status
+## Phase 4 status
 
-Phase 2 added real Firebase authentication source. Phase 3 replaces the Weather tab placeholder with a three-city picker, real three-day Open-Meteo requests, safe JSON decoding, forecast cards, and loading/error/retry/empty states. The selected city is remembered and shown in Profile. Plan management remains a clearly marked future feature.
+Phases 2-3 added Firebase authentication source and real three-day weather requests. Phase 4 adds simple Good/Risky/Avoid recommendations, green/orange/red labels, selectable forecast cards, and a Plan Laundry button opening AddPlanView. The sheet receives the actual city/date and accepts an optional note. It clearly states that saving is unavailable; no plan or note is persisted yet.
 
 This workspace is on Windows. `xcodebuild`, `xcrun`, and `swift` were not found on PATH. No native Xcode tools were available to create a project or app target. There is **no `.xcodeproj`, configured app target, verified build, or verified launch yet**. Follow the Mac setup below to create the project using Xcode's native App template.
 
@@ -44,6 +44,7 @@ IOS project/
       ProfileView.swift
       WeatherHomeView.swift
       WeatherDayCard.swift
+      AddPlanView.swift
     ViewModels/
       AuthViewModel.swift
       WeatherViewModel.swift
@@ -55,14 +56,15 @@ IOS project/
       .gitkeep
   Tests/
     WeatherServiceTests.swift
+    DryingRecommendationTests.swift
 ```
 
 - `App`: SwiftUI entry point and Firebase startup in AppDelegate.
-- `Models`: supported cities, optional decoded daily arrays, and individual weather days.
-- `Views`: authentication, main tabs, weather picker/cards, and profile/logout.
+- `Models`: supported cities, optional decoded daily arrays, weather days, and the small recommendation function/enum in WeatherDay.swift.
+- `Views`: authentication, tabs, selectable weather cards, profile/logout, and the unsaved Add Plan sheet.
 - `ViewModels`: authentication state plus weather loading, results, errors, and request identity.
 - `Services`: `WeatherService` builds the URL, requests data, checks HTTP status, and decodes forecasts. Firestore operations come later.
-- `Tests`: XCTest coverage for request parameters and safe JSON parsing using clearly labelled synthetic fixtures. Add these files only to a unit test target, not the app.
+- `Tests`: XCTest coverage for requests, JSON decoding, and recommendation examples/boundaries using labelled synthetic inputs. Add these files only to a unit test target, not the app.
 - `Resources`: future asset catalog and Firebase configuration.
 - `.gitkeep`: empty file that lets Git preserve an otherwise empty folder. It is not Swift code and does not need target membership.
 - `.gitignore`: excludes local Xcode user state and build output.
@@ -108,7 +110,7 @@ Confirm `SWIFT_VERSION` and `IPHONEOS_DEPLOYMENT_TARGET` in the settings output.
 
 ### Add the official SDK with Swift Package Manager
 
-1. Create/open the native `DhobiGhat.xcodeproj` using the instructions above. Confirm all 14 app Swift files under `DhobiGhat/` belong to the **DhobiGhat** app target. `Tests/WeatherServiceTests.swift` belongs only to the optional test target described below.
+1. Create/open the native `DhobiGhat.xcodeproj` using the instructions above. Confirm all 15 app Swift files under `DhobiGhat/` belong to the **DhobiGhat** app target. Both Swift files under `Tests/` belong only to the test target described below.
 2. Choose **File > Add Package Dependencies** (called **Add Packages** in some Xcode versions).
 3. Enter the official repository: [firebase/firebase-ios-sdk](https://github.com/firebase/firebase-ios-sdk).
 4. Select a stable release compatible with the installed Xcode, using **Up to Next Major Version** from that release. Check the SDK's current toolchain requirements in the [official setup guide](https://firebase.google.com/docs/ios/setup) before resolving it; do not select the development branch. Retain iOS 17.0 as the minimum unless the actual toolchain requires a higher supported minimum.
@@ -195,11 +197,44 @@ Weather uses [Open-Meteo's forecast API](https://open-meteo.com/en/docs) with th
 | Empty forecast | Run the absent daily/dates fixture tests; zero days lets the screen show its empty state | XCTest/UI pending |
 | Cancellation/loading | Switch away during a request, return, and switch cities; no stale error or response should overwrite the current request | Pending |
 
-Drying recommendation rules and laundry plan creation are intentionally deferred to the requested later phases. No artificial forecast data appears in the app.
+Phase 4 now adds recommendations and the unsaved planning form described below. Firestore plan creation is still deferred. No artificial forecast data appears in the app.
+
+## Phase 4 recommendations and laundry-date selection
+
+`WeatherDay.dryingRecommendation()` uses the already-fetched data and a short if/else function. It first requires usable rain probability, precipitation, and wind inputs. Missing values, NaN/infinity, probabilities outside 0...100, and negative precipitation/wind return nil, shown as **Unavailable**. Temperature does not participate in these project rules.
+
+1. **Avoid (red)**: probability >= 60% OR precipitation >= 3 mm.
+2. **Risky (orange)**: if Avoid did not apply, probability >= 30% OR precipitation >= 1 mm OR wind >= 30 km/h.
+3. **Good (green)**: otherwise.
+
+The screen states: **Drying recommendations are basic project-defined guidelines, not guaranteed drying predictions.** There is no machine learning, score, or extra network request.
+
+Tap any forecast card to select its date. A blue outline and checkmark identify the selection. WeatherHomeView owns selectedDate in @State; the child card receives @Binding. Plan Laundry is enabled only when the selected date belongs to the current city's loaded forecast. City changes, retry, and a new load clear the selection, preventing an old date from being used.
+
+The button opens AddPlanView as a native sheet. It displays the city and selected date, allows choosing another returned forecast date using the same binding, and provides an optional local note. All available dates remain selectable regardless of recommendation. The form has Close and explicitly says it does not save. No Firestore access or pretend success message is added in Phase 4.
+
+### Phase 4 tests and Mac steps
+
+- Include the new `DhobiGhat/Views/AddPlanView.swift` in the **DhobiGhat app target**, alongside the modified WeatherDay, WeatherDayCard, and WeatherHomeView files. No new SDK, package, permission, or Firebase configuration is required by these changes.
+- Add `Tests/DryingRecommendationTests.swift` to the existing **DhobiGhatTests XCTest target only**, alongside WeatherServiceTests.swift. If no target exists, follow the unit-test target steps above. Choose an iPhone Simulator, then **Product > Test** (`Command-U`).
+- Seven new test methods contain 28 assertions covering the five requested examples (Good, Risky, Avoid, Avoid, Risky); rain boundaries 29.99/30 and 59.99/60; precipitation boundaries 0.99/1 and 2.99/3; wind boundary 29.99/30; Avoid priority; missing inputs; and invalid/non-finite values.
+- The tests exercise the real Swift recommendation method using labelled synthetic inputs. They are prepared and source-reviewed, **not compiled or executed** here. Xcode/Swift and the iOS Simulator remain unavailable.
+
+| Manual check | Expected behavior | Status here |
+| --- | --- | --- |
+| Recommendation labels | Text and green/orange/red colors match the actual forecast's rule result; missing required values show gray Unavailable | Pending |
+| Select each date | Any returned date can be selected; only one card has the blue outline/checkmark | Pending |
+| No selection / failed forecast | Plan Laundry stays disabled | Pending |
+| Sheet opens | City and the selected forecast date match the Weather screen | Pending |
+| Change date in sheet | Picker offers current forecast dates; closing highlights the newly chosen date | Pending |
+| Change city or retry | Selection clears; an old city's date cannot be used while loading | Pending |
+| Close form | No database write or saved-plan claim; local note is discarded | Pending |
+
+Every recommendation branch and the state/binding flow are explained in VIVA_NOTES.md. Existing Firebase and weather checks remain pending as previously recorded; no app build or launch is claimed.
 
 ## Full project requirements
 
-This is the full project scope. Authentication source, main tabs, and Weather Home have been added through Phase 3; native build and app acceptance remain pending.
+This is the full project scope. Authentication, weather, recommendations, date selection, and an unsaved plan form have source implementations through Phase 4; native build and app acceptance remain pending. Plan persistence and management are future work.
 
 - Email/password registration, login, restored sessions, useful authentication errors, and logout.
 - Authentication before the main **Weather**, **My Plans**, and **Profile** tabs.
@@ -230,7 +265,7 @@ Use only Authentication and Cloud Firestore. Store plans at `users/{userUID}/pla
 
 The Phase 2 package setup includes the Firestore product as requested, but there are no Firestore calls or plan data yet. Create Firestore and deploy owner-only security rules when the plan-storage phase is requested. Authentication alone does not secure future Firestore data.
 
-### Open-Meteo cities and later drying rules
+### Open-Meteo cities and drying rules
 
 | City | Latitude | Longitude |
 | --- | --- | --- |
@@ -252,4 +287,4 @@ These rules are not scientific guarantees.
 
 Always use **DhobiGhat** as the app name. Before each phase, inspect the workspace and read `PROJECT_PROGRESS.md`. Preserve working code, modify only what that phase needs, review source, run available checks, and report limitations honestly. Update `PROJECT_PROGRESS.md` and `VIVA_NOTES.md` after each phase, explain manual steps and concepts, provide one meaningful commit message, then stop for the next instruction.
 
-Stop after Phase 3 and await the next explicit phase instruction. Native project/SPM/Firebase setup, Swift tests, and app acceptance checks remain pending.
+Stop after Phase 4 and await the next explicit phase instruction. Native project/SPM/Firebase setup, Swift tests, and app acceptance checks remain pending.

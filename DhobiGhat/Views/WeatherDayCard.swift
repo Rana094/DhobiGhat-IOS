@@ -2,20 +2,63 @@ import SwiftUI
 
 struct WeatherDayCard: View {
     let day: WeatherDay
+    @Binding var selectedDate: String
+
+    private var recommendationColor: Color {
+        switch day.dryingRecommendation() {
+        case .good:
+            return .green
+        case .risky:
+            return .orange
+        case .avoid:
+            return .red
+        case nil:
+            return .secondary
+        }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label(day.date, systemImage: "calendar")
+        Button {
+            selectedDate = day.date
+        } label: {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Label(day.date, systemImage: "calendar")
+                    Spacer()
+                    if selectedDate == day.date {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.blue)
+                    }
+                }
                 .font(.headline)
 
-            WeatherValueRow(title: "Max temperature", symbol: "thermometer.medium", value: day.temperature, unit: "°C")
-            WeatherValueRow(title: "Rain probability", symbol: "cloud.rain", value: day.rainProbability, unit: "%")
-            WeatherValueRow(title: "Precipitation", symbol: "drop", value: day.precipitation, unit: "mm")
-            WeatherValueRow(title: "Max wind speed", symbol: "wind", value: day.windSpeed, unit: "km/h")
+                WeatherValueRow(title: "Max temperature", symbol: "thermometer.medium", value: day.temperature, unit: "°C")
+                WeatherValueRow(title: "Rain probability", symbol: "cloud.rain", value: day.rainProbability, unit: "%")
+                WeatherValueRow(title: "Precipitation", symbol: "drop", value: day.precipitation, unit: "mm")
+                WeatherValueRow(title: "Max wind speed", symbol: "wind", value: day.windSpeed, unit: "km/h")
+
+                HStack {
+                    Text("Drying outlook")
+                    Spacer()
+                    Text(day.dryingRecommendation()?.rawValue ?? "Unavailable")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(recommendationColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(recommendationColor.opacity(0.12), in: Capsule())
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(selectedDate == day.date ? Color.blue : Color.clear, lineWidth: 2)
+            }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selectedDate == day.date ? .isSelected : [])
+        .accessibilityHint("Select this forecast date for your laundry plan.")
     }
 }
 
