@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 2 - Firebase Authentication source implemented; native project, SPM attachment, real Firebase configuration, and live verification pending on a Mac.** Updated 2026-11-20 (Asia/Dhaka).
+**Phase 3 - Weather API and JSON parsing source implemented; live HTTP endpoints verified; native build, Swift tests, and app checks pending on a Mac.** Updated 2026-11-20 (Asia/Dhaka).
 
 ## Project conventions
 
@@ -20,6 +20,8 @@ The complete pasted master instructions were read before this phase. Initial wor
 - No Phase 1 implementation or completion record was present. The user explicitly requested Phase 2, so that scope was implemented directly without claiming Phase 1 completion.
 - Phase 2 source: guarded Firebase startup, real registration/login/logout calls, session listener, validation, errors, login/register form, authenticated tab shell, and profile/logout.
 - Phase 2 package attachment and live acceptance tests remain pending. No connected or tested Firebase deployment is claimed.
+- Phase 3 source: three supported cities, direct Decodable models, safe daily-array conversion, native URLSession requests, observable weather state, picker/cards, loading/errors/retry/empty states, persisted city, and protection against old city responses.
+- Phase 3 live endpoint checks: all three cities returned HTTP 200 with three days; an invalid-field request returned HTTP 400. These are external HTTP checks, not execution of the Swift app.
 
 ## Current project structure and files created
 
@@ -34,19 +36,28 @@ IOS project/
       AppDelegate.swift
       DhobiGhatApp.swift
     Models/
+      City.swift
+      WeatherResponse.swift
+      WeatherDay.swift
       .gitkeep
     Views/
       RootView.swift
       LoginView.swift
       MainTabView.swift
       ProfileView.swift
+      WeatherHomeView.swift
+      WeatherDayCard.swift
     ViewModels/
       AuthViewModel.swift
+      WeatherViewModel.swift
       .gitkeep
     Services/
+      WeatherService.swift
       .gitkeep
     Resources/
       .gitkeep
+  Tests/
+    WeatherServiceTests.swift
 ```
 
 Phase 0 created the original scaffold and expanded README. Phase 2 changes:
@@ -60,6 +71,21 @@ Phase 0 created the original scaffold and expanded README. Phase 2 changes:
 - Created `Views/ProfileView.swift`: authenticated email and real logout through the shared `@EnvironmentObject`.
 - Updated README with exact native Xcode/SPM/Console/plist setup and manual acceptance tests; updated VIVA_NOTES with the current code and concepts.
 - Existing placeholder folders and `.gitkeep` files are preserved. No models, weather services, plan services, or extra architecture were introduced.
+
+Phase 3 files created/modified:
+
+- Created `Models/City.swift`: Khulna, Dhaka, Chattogram with the requested coordinates and predefined list.
+- Created `Models/WeatherResponse.swift`: direct Decodable structs, CodingKeys, optional arrays, and optional elements.
+- Created `Models/WeatherDay.swift`: a Bangladesh calendar date string and four optional measurements, with no fake defaults.
+- Created `Services/WeatherService.swift`: URLComponents/query items, explicit units, async URLSession, HTTP validation, JSONDecoder, safe index-based conversion, and simple errors.
+- Created `ViewModels/WeatherViewModel.swift`: ObservableObject with @Published days/loading/errors and city; clears old data and accepts only the current non-cancelled request's result/error.
+- Created `Views/WeatherHomeView.swift`: city @Binding, owned @StateObject, menu picker, task-driven reloads, loading/retry/empty states, cards, and Open-Meteo credit.
+- Created `Views/WeatherDayCard.swift`: date plus four measurements with units; missing values display Unavailable.
+- Modified `Views/MainTabView.swift`: replaces the weather placeholder and owns selectedCity using @AppStorage. Invalid saved names fall back to Khulna.
+- Modified `Views/ProfileView.swift`: displays the selected city while preserving authentication behavior.
+- Created `Tests/WeatherServiceTests.swift`: seven XCTest methods with synthetic JSON for URL parameters, normal decoding, optional/unequal arrays, missing dates, date alignment, the three-day limit, and malformed/wrong-type JSON. Prepared, not run.
+- Updated README with weather behavior, endpoint evidence, XCTest setup, and manual checks; updated VIVA_NOTES with networking/JSON/state explanations.
+- Preserved Phase 2 auth and root routing. No fake login, weather package, artificial forecast values, drying rules, or plan storage was added.
 
 ## Toolchain and project settings
 
@@ -91,16 +117,25 @@ No packages or project generators were installed. The required SDK cannot be att
 
 ## Weather API status
 
-- Not implemented or called.
-- No weather data is shown, including no hardcoded data posing as live weather.
-- Later implementation must follow the three supported cities, requested daily fields, Asia/Dhaka timezone, three days, and ordered recommendation thresholds recorded in README.
+- Implemented Open-Meteo HTTPS forecasts for the three cities, `forecast_days=3`, `timezone=Asia/Dhaka`, all four required daily fields, and explicit Celsius/mm/km/h units.
+- Native URLSession timeout is 30 seconds; local URL cache is bypassed. Non-HTTP and non-2xx responses fail before forecast decoding.
+- Optional arrays/elements and unequal lengths are safe: conversion follows original date indexes and preserves missing measurements as nil. Null/empty dates are skipped; absent daily/time produces no days. Malformed/wrong-type JSON throws and becomes an error.
+- Normal responses produce three cards; partial dates yield fewer cards with a note; no dates yields an empty state. Metrics never default to zero, and no sample forecasts are used by the app.
+- City changes cancel the previous task. Request IDs and cancellation checks reject old results, errors, and loading changes. A screen-level city check hides old cards before the new task starts.
+- MainTabView persists the city through @AppStorage, passes a @Binding to WeatherHomeView, and shows the city in Profile.
+- Live checks on 2026-11-20 (Asia/Dhaka), from Python outside the restricted network sandbox: **Khulna HTTP 200; Dhaka HTTP 200; Chattogram HTTP 200**. Each returned `Asia/Dhaka`, dates **2026-11-20 through 2026-11-22**, three entries per required array, and the requested units. This does not prove Swift URLSession/JSONDecoder or UI behavior.
+- Negative endpoint check: an intentionally invalid daily field returned **HTTP 400** with an error reason.
+- Initial restricted probes failed DNS resolution; the same read-only requests succeeded outside that sandbox. This host restriction was not an iOS offline test.
+- Drying recommendations, plan-date selection, and Firestore are deferred.
 
 ## Compilation and test status
 
 - Reviewed the seven Swift source files against official Firebase setup, Auth APIs, and error-code documentation. Reviewed startup order, observable state ownership, listener lifecycle, async loading cleanup, password handling, and root routing. These are source reviews, not compiler or runtime tests.
 - Phase 2 local checks passed: one `@main` across seven Swift files; no trailing whitespace in the seven Swift files and three documentation files; `git diff --check` passed. Source searches found no custom credential persistence, suppressed `try` errors, forced casts, emulator calls, or premature Firestore operations. Only normal LF-to-CRLF notices were emitted by Git. These checks do not establish Swift syntax/type correctness or successful authentication.
 - No Swift compiler, Apple SDK type checking, `xcodebuild`, automated iOS tests, Simulator, or device run was available. **Build and launch are not verified.** Source inspection is not compilation.
-- Registration, login, incorrect credentials, logout, restart/session restoration, UI reaction, validation/error behavior, and account switching: **all live tests pending**. README includes steps and expected results for each. Weather requests and Firestore remain unimplemented and untested.
+- Registration, login, incorrect credentials, logout, session restoration, UI reaction, validation/error behavior, and account switching: **all Firebase live tests pending**. Firestore is unimplemented and untested.
+- Phase 3 endpoint checks above passed. Swift JSON decoding, prepared XCTest execution, city-switch/retry/offline UI, remembered city, and app build/launch are **pending**. No compiler or iOS test success is claimed.
+- Phase 3 local checks passed: 14 app Swift files and one @main; seven XCTest methods prepared; no trailing whitespace or old app name across 18 source/test/documentation files; git diff --check passed. Nine syntactically valid synthetic JSON fixture payloads were checked with Python's JSON parser, including deliberately incompatible field types for Swift decoding tests. This was fixture syntax validation only, not Swift JSONDecoder or XCTest execution.
 
 ## Known bugs and limitations
 
@@ -108,19 +143,20 @@ No packages or project generators were installed. The required SDK cannot be att
 - The `.xcodeproj` and iOS app target do not exist yet. The scaffold cannot currently be opened as an app project or launched.
 - Resources currently contain only a folder placeholder. The native template's asset catalog must be added during Mac setup.
 - Auth source cannot compile until the official Firebase products are added to a real target. No `canImport` fallback or simulated login hides this missing dependency.
-- Weather, plan management, city selection, and remaining state wrappers are deferred. Phase 1 was not available and has not been silently re-created.
+- Weather and city-selection source now exist. Plan management, recommendations, plan-date selection, and remaining state wrappers are deferred. Phase 1 was not available and has not been silently re-created.
 - Actual Firebase behavior, package compatibility, Swift concurrency compilation, and session restoration require a Mac build and configured runtime tests.
 
 ## Manual actions required
 
-Follow README's **Create the native project on a Mac** and **Phase 2 Firebase setup on a Mac** sections:
+Follow README's native project, Firebase setup, and Phase 3 weather/test sections:
 
-1. Create the native DhobiGhat iOS App project; include all seven Swift files and the template asset catalog in its app target.
+1. Create the native DhobiGhat iOS App project; include all 14 app Swift files under DhobiGhat and the template asset catalog in its app target. Keep Tests out of the app target.
 2. Add the official Firebase SPM repository and attach only `FirebaseAuth` and `FirebaseFirestore`. Resolve a stable SDK compatible with your installed Xcode and keep the actual package resolution file.
 3. Register the exact Xcode bundle ID as an iOS app in Firebase Console and enable Email/Password authentication.
 4. Download the real `GoogleService-Info.plist`, add it to DhobiGhat/Resources with app target membership and bundle inclusion, and verify the bundle ID matches.
 5. Add the Boolean app Info key `FirebaseAppDelegateProxyEnabled = NO` as described by official SwiftUI setup.
-6. Build/run and execute all README acceptance tests. Record actual results rather than marking tests passed based on source inspection.
+6. Create the DhobiGhatTests XCTest target with DhobiGhat as host; add Tests/WeatherServiceTests.swift only to the test target and run Product > Test.
+7. Build/run all README auth/weather acceptance tests, including fast city switching on a slow connection, disconnect/retry, and city restoration/Profile display. Record actual results rather than marking tests passed from source inspection.
 
 Before marking native Phase 0 checks complete, record:
 
@@ -129,10 +165,10 @@ Before marking native Phase 0 checks complete, record:
 - Confirmation that Xcode recognizes `DhobiGhat.xcodeproj` and its DhobiGhat iOS application target/scheme.
 - Selected Simulator/device and OS version.
 - Resolved Firebase SDK version and the two linked products.
-- Build result, launch result, and each live authentication test result, including actual errors.
+- Build result, launch result, XCTest result, and each live auth/weather app test result, including errors.
 
 ## Next implementation steps
 
 1. Finish the manual native/SPM/Firebase setup and verification above when a Mac is available.
-2. Stop after Phase 2 and wait for the next explicit phase instruction.
+2. Stop after Phase 3 and wait for the next explicit phase instruction.
 3. Before the next phase, inspect existing files and reread this progress record. Keep code beginner-friendly, use the requested MVVM/state ownership, and preserve real working functionality.

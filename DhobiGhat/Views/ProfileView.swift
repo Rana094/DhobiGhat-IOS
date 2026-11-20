@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProfileView: View {
+    let selectedCity: String
     @EnvironmentObject private var auth: AuthViewModel
 
     var body: some View {
@@ -9,6 +10,10 @@ struct ProfileView: View {
                 Section("Signed in as") {
                     Text(auth.userEmail)
                         .textSelection(.enabled)
+                }
+
+                Section("Selected city") {
+                    Text(selectedCity)
                 }
 
                 if let errorMessage = auth.errorMessage {

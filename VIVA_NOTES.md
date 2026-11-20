@@ -1,8 +1,8 @@
 # DhobiGhat Viva Notes
 
-## Phase 2: what is implemented
+## Phase 3: what is implemented
 
-Seven Swift source files now describe real Firebase email/password authentication and its UI. Native Xcode project creation, SPM attachment, a real Firebase plist, and live tests remain pending because this workspace runs on Windows without Xcode or Swift. Authentication source is implemented; connectivity, compilation, session restoration, and launch are unverified. Weather and plan storage are not implemented. Phase 1 was not present; Phase 2 was explicitly requested next.
+Fourteen app Swift files now describe Firebase authentication and Open-Meteo weather. Native Xcode project creation, Firebase SPM/configuration, build, and app tests remain pending because this workspace runs on Windows without Xcode or Swift. Direct checks of all three city endpoints returned HTTP 200 with three days; these do not verify the Swift parser or UI. Seven XCTest methods are prepared but not run. Plan storage and drying recommendations are unimplemented. Phase 1 was not present; later phases were explicitly requested.
 
 ## Current app flow and important code
 
@@ -15,22 +15,22 @@ Seven Swift source files now describe real Firebase email/password authenticatio
 7. View modifiers set the font, color, alignment, padding, frame, background, and navigation title. The background is a faint blue produced by `opacity(0.06)`.
 8. `Color` and `.infinity` are native SwiftUI values. `frame(maxWidth:maxHeight:)` lets the content fill available space; `padding(24)` provides inner spacing.
 
-The original welcome content now appears in the authenticated Weather tab. `NavigationStack` provides each screen's title. `Form` groups login and profile controls, `SecureField` masks the password, and `TabView` switches between Weather, My Plans, and Profile. Weather and plan management show explicit placeholders. `body` is a computed property, not a stored screen image.
+`NavigationStack` provides each screen's title. `Form` groups login/profile controls, `SecureField` masks the password, and `TabView` switches between Weather, My Plans, and Profile. Weather displays API results when configured and run; only plan management remains a placeholder. `body` is a computed property, not a stored screen image.
 
 ## SwiftUI state concepts
 
-Some concepts are implemented in Phase 2; the remaining required wrappers will be introduced when their real features are added.
+The table separates current uses from wrappers/features still planned.
 
 | Concept | Meaning | Current or planned meaningful use |
 | --- | --- | --- |
-| `@State` | View-owned local UI state that can trigger a refresh | Implemented: LoginView email, password, and register/login mode; later: forecast date and sheet |
-| `@Binding` | Read/write access to state owned elsewhere | City and child date selection; `$value` passes a binding |
-| `ObservableObject` | Protocol for reference types that notify SwiftUI about changes | Implemented: AuthViewModel imports Combine; weather/plan models later |
-| `@Published` | Publishes changes to properties of an observable object | Implemented: current user, email, loading, errors, session check, and setup error |
-| `@StateObject` | Creates and preserves an observable object for the owning view's lifetime | Implemented: Root owns auth; later: main tabs own plans and weather screen owns weather |
+| `@State` | View-owned local UI state that can trigger a refresh | Login inputs/mode and WeatherHomeView's Retry count; forecast date and sheet later |
+| `@Binding` | Read/write access to state owned elsewhere | WeatherHomeView reads/changes MainTabView's city; `$selectedCity` passes the binding; date selection later |
+| `ObservableObject` | Protocol for reference types that notify SwiftUI about changes | AuthViewModel and WeatherViewModel import Combine; plan model later |
+| `@Published` | Publishes changes to properties of an observable object | Auth properties plus weather days, loading, errors, and city name |
+| `@StateObject` | Creates and preserves an observable object for the owning view's lifetime | Root owns auth; WeatherHomeView owns weather; main tabs will own plans later |
 | `@ObservedObject` | Observes an object supplied by another owner | My Plans receives the existing plan ViewModel |
 | `@EnvironmentObject` | Reads a shared observable object injected by an ancestor | Implemented: LoginView and ProfileView read auth after root injects it |
-| `@AppStorage` | Connects a simple preference in UserDefaults to SwiftUI | Remember selected city across launches |
+| `@AppStorage` | Connects a simple preference in UserDefaults to SwiftUI | MainTabView remembers selectedCity across launches and passes it to Profile |
 
 `@StateObject` owns a model's lifetime; `@ObservedObject` receives an existing model. Do not recreate a ViewModel every time a view's `body` runs. `@AppStorage` is for the city preference, not passwords or account-specific plans. The project requires `ObservableObject` and `@Published`, not the newer `@Observable` macro.
 
@@ -65,11 +65,48 @@ Firebase Authentication handles email/password sign-in and provides an authentic
 
 Rules must require a signed-in user whose UID matches the path's UID. The plan model must clear old plans and stop old account listeners/tasks on sign-out or account changes so one account's state cannot appear in another session. Session restoration and actual rule behavior will need runtime verification later.
 
-## JSON and networking concepts for later phases
+## Phase 3 networking and JSON concepts
 
-JSON is a text format for structured data. `URLSession` will request Open-Meteo data using `async/await`. The service must check the HTTP response and handle failures. `JSONDecoder` will convert response bytes into `Decodable` structs; `CodingKeys` can map JSON names to simple Swift property names. `Codable` combines decoding and encoding; an API response that is only read can use `Decodable`.
+**URLSession** is Apple's networking API. `fetchWeather(for:)` uses `URLSession.shared.data(for:)` to get response bytes (`Data`) and response metadata. The service casts metadata to `HTTPURLResponse` and accepts only status codes 200...299. Transport failures throw; HTTP 400/500 must be checked separately because they do not automatically make URLSession throw.
 
-The daily response contains dates and related measurements. Later code must handle missing values and inconsistent arrays without force unwraps or out-of-range indexing. Three daily forecasts use `Asia/Dhaka` dates. No network request or JSON parser exists yet.
+**JSON** is text representing objects, arrays, numbers, strings, booleans, and null. Open-Meteo's `daily` object contains parallel arrays: index 0 of `time` and index 0 of each measurement refer to the same day.
+
+**Decodable** lets a Swift type be constructed from encoded data. `WeatherResponse` contains the optional daily object; `DailyWeather` contains optional arrays. Swift synthesizes decoding for these simple structs. `CodingKeys` maps `temperature_2m_max` to the simpler Swift name `temperature`, and similarly for other fields.
+
+**Codable** combines `Decodable` and `Encodable`. Decoding reads data into Swift values; encoding writes Swift values into data. These read-only API responses only need Decodable.
+
+**JSONDecoder** does the conversion: `try JSONDecoder().decode(WeatherResponse.self, from: data)`. Malformed JSON or incompatible types throw. Unknown fields are ignored; optional properties permit missing/null values. A string such as `"warm"` cannot decode as a Double and produces an error rather than being silently accepted.
+
+**async/await** lets a request suspend while waiting so the UI stays responsive. `async` marks asynchronous work; `await` waits without blocking the UI thread. `throws` and `try` handle failures. Cancellation is cooperative: URLSession can cancel its request, and the ViewModel also checks cancellation before publishing a result.
+
+**@Published** makes weather days, loading, errors, and city changes observable through Combine. SwiftUI can refresh when they change. `@MainActor` keeps these UI state changes on the main actor; network waiting does not block it.
+
+### Safe optional arrays and date alignment
+
+`[Double?]?` has two optional levels: the array can be missing/null, and a present array can contain null elements. Each final WeatherDay measurement is `Double?`. `value(at:in:)` checks the array and its indexes before subscripting. Missing data stays nil and displays **Unavailable**; a real zero stays zero.
+
+`decodeWeather(from:)` uses up to the first three original date positions and the same index for each measurement. It skips null/empty dates without shifting other measurements. Missing daily/time returns no days; short date arrays produce fewer cards with an availability note. Dates remain the API's `yyyy-MM-dd` Bangladesh calendar strings, avoiding UTC conversions that could change the date and matching future plan storage.
+
+### Weather functions and state flow
+
+1. MainTabView owns `@AppStorage("selectedCity")`; invalid names fall back to Khulna. This stores a preference, never credentials.
+2. WeatherHomeView receives a `@Binding`, owns its ViewModel with `@StateObject`, and shows a Picker from City.cities.
+3. `.task(id:)` loads on appearance. Its ID combines the selected city and Retry count; either change cancels the old task and starts another.
+4. `makeURL(for:)` uses URLComponents/URLQueryItem to encode coordinates, four daily fields, three days, Asia/Dhaka, and explicit Celsius/mm/km/h units safely.
+5. `fetchWeather(for:)` sends the request with a 30-second timeout, checks HTTP status, and calls `decodeWeather(from:)`.
+6. `loadWeather(for:)` clears old data/errors and sets loading. Each request receives a UUID; only the current non-cancelled request may publish results/errors or end loading. Expected cancellation is not presented as a network failure.
+7. The screen compares weather.cityName with the picker before showing cards, hiding old-city data before the new task begins. `defer` ends loading only for the current request.
+8. WeatherDayCard shows the date and four measurements. A small private row view keeps formatting consistent. App source has no sample forecast values, and the screen credits Open-Meteo.
+
+`Identifiable` supplies stable names/dates for ForEach. `Equatable` permits city comparisons. `Sendable` on City and WeatherDay declares their immutable values safe to pass across concurrency boundaries. A request UUID is a unique identifier for network work, not a Firebase user or document identifier.
+
+### Verification limits
+
+Direct Python HTTP/JSON checks on 2026-11-20 verified HTTP 200, Asia/Dhaka, and three complete daily entries for November 20-22 for each city. An invalid-field request returned HTTP 400. These checks did not execute Swift code. Restricted sandbox DNS initially failed; the read-only probes succeeded outside that sandbox.
+
+Tests/WeatherServiceTests.swift contains seven XCTest methods with labelled synthetic fixtures. They cover query parameters, complete decoding, missing/null/unequal arrays, absent dates/daily data, date-index alignment, the three-day limit, and malformed/wrong-type JSON. They are not compiled or run. README explains creating the test target and Product > Test. City switching, saved-city restoration, offline/retry screens, JSONDecoder execution, and app build/launch remain pending on a Mac.
+
+API reference: [Open-Meteo forecast documentation](https://open-meteo.com/en/docs).
 
 ## Planned drying recommendation function
 
@@ -105,6 +142,16 @@ Apply Avoid first: rain probability >= 60% or precipitation >= 3 mm. Otherwise a
 
 **Is FirebaseFirestore used already?** It is a required package product to attach during setup, but this phase makes no Firestore calls. Database operations and security rules remain for the plan-storage phase.
 
-**What should be tested on a Mac next?** Create the native target, attach the SDK, add real configuration, build/run, then verify registration, valid/invalid login, logout, restart restoration, persisted logout, and UI reaction. README includes every test with its expected result; all are pending here.
+**Why not use zero for missing rain data?** Zero predicts no precipitation. Missing data means we do not know; substituting zero could mislead the user and future recommendations.
+
+**Why not zip every array?** A shorter array should not drop valid dates. Keeping the original date index preserves alignment and marks only missing measurements unavailable.
+
+**Why both cancellation and a request ID?** Cancellation asks old work to stop. The ID additionally prevents a late old result/error from overwriting the newly selected city's state.
+
+**What happens without internet?** URLSession throws a transport error. The ViewModel publishes a useful message, ends loading, and offers Retry without showing another city's old forecast.
+
+**Why is rain probability Double?** Direct numerical decoding accepts integers and fractions without a custom parser; the card displays the value with a percent unit.
+
+**What should be tested on a Mac next?** Create the native target, attach Firebase and real configuration, build/run, and run XCTest. Verify auth flows, three weather cities, rapid switching, offline/retry, missing values, and remembered city. README records expected results; app tests remain pending.
 
 Official study references: [Firebase setup](https://firebase.google.com/docs/ios/setup), [email/password authentication](https://firebase.google.com/docs/auth/ios/password-auth), [session listeners](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Classes/Auth.html), and [error codes](https://firebase.google.com/docs/reference/swift/firebaseauth/api/reference/Enums/AuthErrorCode).
