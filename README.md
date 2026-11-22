@@ -2,9 +2,9 @@
 
 A beginner-level SwiftUI mini-project for a Mobile Computing Lab. The planned app helps students choose laundry days using real weather forecasts.
 
-## Phase 5 status
+## Phase 6 status
 
-Source now includes authentication, real weather requests, drying recommendations, and Firestore laundry plans. Phase 5 adds Save/Cancel to AddPlanView and replaces the My Plans placeholder with one-time retrieval, Pending/Completed status, completion, confirmed deletion, refresh, loading, and errors. Each operation uses the authenticated UID and the shared PlanViewModel. `firestore.rules` restricts access to the matching owner and validates plan fields.
+Source includes authentication, real weather, drying recommendations, and Firestore plan CRUD. Phase 6 connects acknowledged saves to the My Plans tab after sheet dismissal, improves native small-screen layouts and loading/refresh feedback, adds earlier date validation, and trims note edges before storage. Existing MVVM, UID isolation, property-wrapper ownership, and real integrations are preserved. No packages, major features, sample forecasts, or styling framework were added.
 
 This workspace is on Windows. `xcodebuild`, `xcrun`, and `swift` were not found on PATH. No native Xcode tools were available to create a project or app target. There is **no `.xcodeproj`, configured app target, verified build, or verified launch yet**. Follow the Mac setup below to create the project using Xcode's native App template.
 
@@ -321,9 +321,49 @@ service cloud.firestore {
 
 Restore the actual repository policy after that test. Console administrator access is unaffected by client security rules and cannot substitute for an app permission test.
 
+## Phase 6 integration review and UI improvements
+
+### Changes made
+
+- MainTabView owns a simple selectedTab @State with matching string tags for Weather, My Plans, and Profile. AddPlanView notifies WeatherHomeView only after an acknowledged save while the form is still visible. WeatherHomeView waits for the sheet's onDismiss before asking MainTabView to select My Plans. Cancelling a pending form does not cause a later automatic tab change.
+- Weather metrics use native ViewThatFits: show a horizontal label/value row when it fits, otherwise stack vertically. Values use primary text color; cards use the native grouped-card background so they remain readable in light/dark appearances. Rounded selection outlines and recommendation colors are preserved.
+- My Plans uses separate inset-grouped plan sections, wrapping notes, and vertically stacked bordered actions. This avoids crowding Mark completed and Delete on a narrow screen. Profile email wraps; forms use the same soft blue background.
+- Weather and My Plans have explicit native refresh controls using existing request functions. Authentication loading names the action; password Return submits through the same guarded handler as the login/register button. Login and plan forms dismiss the keyboard interactively while scrolling.
+- Plan Laundry and Save reject a date unless it is both in the loaded forecast and a valid yyyy-MM-dd calendar date. The plan form shows a date error before sending an invalid request. PlanService trims leading/trailing note whitespace; internal text/newlines remain intact.
+- Existing root auth environment injection, three ViewModel owners, observed shared plan model, @AppStorage city preference, logout/account clearing, server-acknowledged writes, and old-city request guards were traced in source. No production weather/plan fixture data was found to remove; synthetic values remain only in Tests.
+
+Apple references for the native layout/keyboard APIs: [ViewThatFits](https://developer.apple.com/documentation/swiftui/viewthatfits), [scrollDismissesKeyboard](https://developer.apple.com/documentation/swiftui/view/scrolldismisseskeyboard(_:)).
+
+### Flow review and remaining runtime checks
+
+| Flow / check | Source path reviewed | Runtime status |
+| --- | --- | --- |
+| Login -> main -> logout -> login | Root owns/injects auth; actual Firebase currentUser controls routing; successful signOut removes main UI | Pending |
+| City -> JSON -> cards | AppStorage binding -> task ID -> URLSession/JSONDecoder -> @Published days -> cards | Pending; prior HTTP probes only |
+| Date -> form -> Save -> My Plans | Shared date binding -> calendar validation -> shared PlanViewModel -> actual server write/refresh -> callback -> sheet dismissal -> selected tab | Pending |
+| View -> complete -> delete | Observed plans -> real updateData -> refresh; Delete alert -> real delete -> refresh | Pending |
+| State ownership | One @StateObject each for auth, weather, plans; three child views observe the single plan instance | Source-reviewed; UI pending |
+| Environment | Root provides auth to Login, MainTab, and Profile; sheet receives plans explicitly | Source-reviewed; UI pending |
+| Logout and account switch | UID-based root identity, setUser(nil), account tokens, and current Firebase UID checks | Pending live A/B test |
+| No stale city data | Old days cleared; task cancellation/request ID and city-name checks reject obsolete responses/errors | Pending slow-network UI test |
+| Cancel during pending save | Closing keeps the SDK operation pending but suppresses a later automatic navigation callback | Pending |
+| Invalid/empty input | Auth validation, actual forecast membership, strict plan date, trimmed note, duplicate-save guards | Pending |
+
+### Small-iPhone acceptance procedure
+
+1. Complete the existing native Xcode/SPM/Firebase/database/rules setup and run Product > Build and Product > Test. No new target files or packages are needed for Phase 6.
+2. Run on the smallest iPhone Simulator supported by the installed runtime, in portrait and landscape. Use both default text size and a large accessibility Dynamic Type size.
+3. Confirm that city selection, every weather measurement/unit, Good/Risky/Avoid/Unavailable labels, selection checkmarks, and Plan Laundry are readable without horizontal clipping. Narrow weather rows should stack vertically.
+4. Show the software keyboard in Login and Add Plan. Scroll to every input/action; test password Go, interactive keyboard dismissal, Save/Cancel, and the inline modal title.
+5. Use a long email and a multiline note. Profile and My Plans should grow vertically. Completion/Delete buttons must remain reachable and independent, with no accidental second action.
+6. Execute the four flows in the table using real services. Confirm a successful visible Save selects My Plans only after dismissal; failed Save stays in the form; Cancel before submission creates nothing; Cancel during a pending write does not later change tabs.
+7. Check light and dark appearances, busy/disabled buttons, refresh/retry, offline/permission errors, city persistence after restart, and logout/login with two accounts. Record the actual device/runtime/results in PROJECT_PROGRESS.
+
+**None of these simulator/layout/live checks has run here.** Windows still has no Xcode, Swift compiler, Simulator, native project, linked Firebase packages, real plist, or deployed rules. Source review is not proof that every button or layout works at runtime. The 21 existing XCTest methods remain unexecuted; no UI-only tests or new dependencies were introduced for reversible presentation changes.
+
 ## Full project requirements
 
-This is the full project scope. Authentication, weather, recommendations, date selection, Firestore plan CRUD, and rules have source implementations through Phase 5. Native setup, build, deployed rules, and all Firebase/app acceptance checks remain pending.
+This is the full project scope. Source implementations through Phase 6 include authentication, weather, recommendations, date selection, Firestore plan CRUD, rules, integrated navigation, and native UI refinements. Native setup, build, deployed rules, and all Firebase/app acceptance checks remain pending.
 
 - Email/password registration, login, restored sessions, useful authentication errors, and logout.
 - Authentication before the main **Weather**, **My Plans**, and **Profile** tabs.
@@ -376,4 +416,4 @@ These rules are not scientific guarantees.
 
 Always use **DhobiGhat** as the app name. Before each phase, inspect the workspace and read `PROJECT_PROGRESS.md`. Preserve working code, modify only what that phase needs, review source, run available checks, and report limitations honestly. Update `PROJECT_PROGRESS.md` and `VIVA_NOTES.md` after each phase, explain manual steps and concepts, provide one meaningful commit message, then stop for the next instruction.
 
-Stop after Phase 5 and await the next explicit phase instruction. Native project/SPM/Firebase setup, rule deployment, Swift tests, and app acceptance checks remain pending.
+Stop after Phase 6 and await the next explicit phase instruction. Native project/SPM/Firebase setup, rule deployment, Swift tests, and app acceptance checks remain pending.

@@ -3,10 +3,12 @@ import SwiftUI
 struct WeatherHomeView: View {
     @Binding var selectedCity: String
     @ObservedObject var plans: PlanViewModel
+    let onPlanSaved: () -> Void
     @StateObject private var weather = WeatherViewModel()
     @State private var retryCount = 0
     @State private var selectedDate = ""
     @State private var showAddPlan = false
+    @State private var didSavePlan = false
 
     private var city: City {
         City.cities.first { $0.name == selectedCity } ?? City.khulna
@@ -14,6 +16,7 @@ struct WeatherHomeView: View {
 
     private var canPlanLaundry: Bool {
         !weather.isLoading && !plans.isLoading && weather.errorMessage == nil && weather.cityName == city.name
+            && LaundryPlan.isValidDate(selectedDate)
             && weather.days.contains(where: { $0.date == selectedDate })
     }
 
@@ -29,7 +32,7 @@ struct WeatherHomeView: View {
                     .pickerStyle(.menu)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
 
                     Text("Three-day forecast for \(city.name)")
                         .font(.title2)
@@ -82,11 +85,20 @@ struct WeatherHomeView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Button("Plan Laundry") {
+                    Button {
+                        didSavePlan = false
                         showAddPlan = true
+                    } label: {
+                        Label("Plan Laundry", systemImage: "calendar.badge.plus")
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(!canPlanLaundry)
+                    .controlSize(.large)
+
+                    if plans.isLoading {
+                        ProgressView("Updating your laundry plans…")
+                    }
 
                     if let url = URL(string: "https://open-meteo.com/") {
                         Link("Weather data: Open-Meteo", destination: url)
@@ -97,6 +109,16 @@ struct WeatherHomeView: View {
             }
             .background(Color.blue.opacity(0.06))
             .navigationTitle("DhobiGhat")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        retryCount += 1
+                    } label: {
+                        Label("Refresh forecast", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(weather.isLoading)
+                }
+            }
         }
         .task(id: "\(selectedCity)-\(retryCount)") {
             guard !Task.isCancelled else { return }
@@ -108,12 +130,18 @@ struct WeatherHomeView: View {
             selectedDate = ""
             showAddPlan = false
         }
-        .sheet(isPresented: $showAddPlan) {
+        .sheet(isPresented: $showAddPlan, onDismiss: {
+            if didSavePlan {
+                didSavePlan = false
+                onPlanSaved()
+            }
+        }) {
             AddPlanView(
                 city: city.name,
                 forecastDates: weather.days.map { $0.date },
                 selectedDate: $selectedDate,
-                plans: plans
+                plans: plans,
+                onSaved: { didSavePlan = true }
             )
         }
     }

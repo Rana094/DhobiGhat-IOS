@@ -10,10 +10,11 @@ struct ProfileView: View {
                 Section("Signed in as") {
                     Text(auth.userEmail)
                         .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Section("Selected city") {
-                    Text(selectedCity)
+                    Label(selectedCity, systemImage: "mappin.and.ellipse")
                 }
 
                 if let errorMessage = auth.errorMessage {
@@ -24,13 +25,17 @@ struct ProfileView: View {
                 }
 
                 Section {
-                    Button("Log out", role: .destructive) {
+                    Button(role: .destructive) {
                         auth.logout()
+                    } label: {
+                        Label("Log out", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                     .disabled(auth.isLoading)
                 }
             }
             .navigationTitle("Profile")
+            .scrollContentBackground(.hidden)
+            .background(Color.blue.opacity(0.06))
         }
     }
 }

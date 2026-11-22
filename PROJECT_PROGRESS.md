@@ -2,7 +2,7 @@
 
 ## Current phase
 
-**Phase 5 - Firestore laundry-plan CRUD, account-scoped state, screens, and rules implemented in source; native setup, deployed rules, build, XCTest, and live checks pending.** Updated 2026-11-20 (Asia/Dhaka).
+**Phase 6 - Source integration review and native UI improvements complete; native setup, deployed rules, build, XCTest, live flows, and small-iPhone layout checks remain pending.** Updated 2026-11-20 (Asia/Dhaka).
 
 ## Project conventions
 
@@ -24,6 +24,7 @@ The complete pasted master instructions were read before this phase. Initial wor
 - Phase 3 live endpoint checks: all three cities returned HTTP 200 with three days; an invalid-field request returned HTTP 400. These are external HTTP checks, not execution of the Swift app.
 - Phase 4 source: small if/else recommendation function, Good/Risky/Avoid colors, Unavailable handling, selected forecast date, Plan Laundry, and a native AddPlanView sheet receiving city/date. Plan saving remains deferred.
 - Phase 5 source: LaundryPlan, PlanService, shared PlanViewModel, actual Save/Cancel form, My Plans retrieval/completion/deletion, one-time server reads after writes, account-result guards, errors, and owner-only firestore.rules. No live Firestore result is claimed.
+- Phase 6 source: confirmed Save now routes to My Plans after sheet dismissal; closed pending forms do not trigger later navigation; weather rows adapt to narrow width, plan actions stack, backgrounds/spacing/labels and loading/keyboard/refresh feedback improve, and date/note validation is tightened. Architecture and real integrations are preserved. No native/live test is claimed.
 
 ## Current project structure and files created
 
@@ -121,6 +122,35 @@ Phase 5 files created/modified:
 - Updated README with database/rule setup, Rules Playground checks, offline behavior, and all pending CRUD/account tests; updated VIVA_NOTES with mapping, SDK calls, property wrappers, account isolation, rules, and limitations.
 - No new packages, Firebase products, backend, Storage, Realtime Database, fake plans, or changes to real authentication/weather integrations.
 
+Phase 6 files modified (no new source files or dependencies):
+
+- `Views/MainTabView.swift`: owns selectedTab as local @State; tags all three tabs; a simple callback selects My Plans after a confirmed save. Existing auth environment, plan @StateObject, AppStorage city, UID task, and logout cleanup are unchanged.
+- `Views/WeatherHomeView.swift`: passes save success through a local flag and sheet onDismiss callback; validates selected calendar dates before enabling planning; provides forecast refresh and a progress explanation while plans update; uses a native card background. Old-city data guards/reset logic are preserved.
+- `Views/AddPlanView.swift`: date errors appear before submission; Save reuses date validation, uses a clear full-width/loading label, and calls the success action only while the form remains visible. Cancel/onDisappear suppress late navigation from a queued write. Inline title, scrolling keyboard dismissal, and matching background improve the small-screen form.
+- `Views/WeatherDayCard.swift`: native ViewThatFits provides horizontal/vertical measurement layouts, primary-color values improve readability, text grows vertically, and semantic card backgrounds avoid hardcoded-white contrast failures. Recommendation colors/selection behavior are preserved.
+- `Views/MyPlansView.swift`: each plan uses an inset-grouped section; long text wraps; Mark completed/Delete stack vertically with icons/bordered buttons; refresh is discoverable in the toolbar. Existing real actions, confirmation alert, errors, and shared model are unchanged.
+- `Views/LoginView.swift`: password Go and the button share a small guarded submit function; loading states name the auth action; forms dismiss the keyboard while scrolling. Firebase validation and password handling are preserved.
+- `Views/ProfileView.swift`: email wraps and native city/logout symbols plus the matching background improve readability. The view still reads the root's auth instance.
+- `Services/PlanService.swift`: trims leading/trailing note whitespace before writing the existing note String; no schema/rules/CRUD architecture change.
+- README now includes the Phase 6 flow matrix and exact small-iPhone/keyboard/Dynamic Type procedure; VIVA_NOTES explains callback timing, state ownership, adaptive views, and verification limits.
+
+## Phase 6 integration review
+
+All findings below are from source review; runtime checks remain pending.
+
+| Check | Source finding |
+| --- | --- |
+| Login -> main -> logout -> login | Root gates on actual Firebase User, injects auth once, and successful logout removes UID-keyed main tabs |
+| Select city -> fetch JSON -> forecast | AppStorage binding and task ID feed actual coordinates to URLSession/JSONDecoder; @Published weather state drives cards |
+| Select date -> form -> Save -> My Plans | Binding and calendar/membership checks feed the shared PlanViewModel; actual acknowledgment/refresh precedes a visibility-guarded callback; onDismiss selects the plans tab |
+| View -> complete -> delete | Observed list buttons call actual UID-scoped update/delete, with confirmation and subsequent refresh |
+| ViewModel ownership | One @StateObject each for Root auth, WeatherHome weather, and MainTab plans; child plan screens observe the same instance |
+| Environment | Root injects auth for Login/MainTab/Profile; the sheet receives the existing plan object explicitly |
+| Account/city state | Plan state clears on UID change/removal, account tokens reject late results, and city preference alone persists via AppStorage |
+| Stale forecasts | Request cancellation/IDs, immediate old-card hiding, and date reset remain intact |
+| Networking/UI | Native async APIs suspend requests; no synchronous network loading, fake weather, fake plans, or simulated authentication is in production views |
+| Small-screen usability | Adaptive metric rows, wrapped text, stacked actions, scrollable forms, native backgrounds, and keyboard dismissal added; actual rendering is unverified |
+
 ## Toolchain and project settings
 
 | Check | Actual status |
@@ -190,6 +220,9 @@ No packages or project generators were installed. The required SDK cannot be att
 - Phase 5 source review covers the schema/path, initialization guards, async CRUD, account/result boundaries, busy-state guards, refresh failures, offline confirmation, form/list wiring, and owner-only policy. This is not a runtime or security test.
 - Phase 5 model tests are prepared. Build, all 21 XCTest methods, rule compilation/publication, Save, restart retrieval, completion, deletion, Console evidence, two-account access, permission errors, and unavailable-network app tests are **pending**. No Firebase Console configuration or credentials were supplied.
 - Phase 5 final local checks passed: 19 app Swift files, three XCTest files with 21 prepared methods, and one @main; no trailing whitespace or old app name across 26 source/test/documentation/rules files; git diff --check passed. Source searches found no Firestore snapshot listener, Storage/Realtime Database import, forced try/cast, or suppressed try error. These are static source/file reviews, not a Swift build, rules compiler check, or runtime test.
+- Phase 6 source tracing covers every button/callback, tab tag, sheet action, observed model reference, root environment injection, UID cleanup, published state usage, and production data path. No unused forecast/plan fixtures were found in production screens; labelled test fixtures were retained.
+- All four live user flows, every actual button action, @Published-driven rendering, persisted city/session, account isolation, keyboard, light/dark appearance, and small-iPhone/Dynamic Type checks remain pending. Existing 21 XCTest methods are unchanged and unexecuted. No new tests were added for reversible layout-only changes.
+- Phase 6 local checks passed: git diff --check, whitespace/app-name checks across 26 files, 19 app Swift files, three unchanged XCTest files with 21 methods, one @main, and exactly one construction site each for AuthViewModel/WeatherViewModel/PlanViewModel. Call sites for tab tags, success callbacks, shared objects, and actual production data constructors were inspected. This is source-level verification only; no Swift compilation, rendered layout, Firebase action, or security test is claimed.
 
 ## Known bugs and limitations
 
@@ -201,10 +234,11 @@ No packages or project generators were installed. The required SDK cannot be att
 - Actual Firebase behavior, package compatibility, Swift concurrency compilation, and session restoration require a Mac build and configured runtime tests.
 - Server-only plan reads require connectivity. An offline submitted write may remain pending; a dismissed sheet does not cancel it. Duplicate taps are blocked in the current model, but this phase does not add durable idempotency across application restarts. Inspect server results after reconnecting.
 - A malformed existing document blocks a strict list mapping and requires correction/removal in Console; the app does not silently hide invalid records. Rules check date text shape, while the app additionally checks calendar validity.
+- Phase 6 layouts and callback navigation have not been compiled or rendered in Xcode. Source improvements do not establish absence of clipping, navigation warnings, or runtime errors; README records the required final device checks.
 
 ## Manual actions required
 
-Follow README's native project, Firebase setup, and Phase 5 Firestore setup/verification sections:
+Follow README's native project, Firebase setup, Phase 5 database/rules setup, and Phase 6 integration/device checks:
 
 1. Create the native DhobiGhat iOS App project; include all 19 app Swift files and the template asset catalog in its app target. New Phase 5 files are LaundryPlan, PlanService, PlanViewModel, and MyPlansView. Keep Tests and firestore.rules out of app source/resource membership.
 2. Add the official Firebase SPM repository and attach only `FirebaseAuth` and `FirebaseFirestore`. Resolve a stable SDK compatible with your installed Xcode and keep the actual package resolution file.
@@ -214,6 +248,7 @@ Follow README's native project, Firebase setup, and Phase 5 Firestore setup/veri
 6. Create the Firestore Standard/Native (default) database in the same Firebase project; publish the exact firestore.rules policy without an overlapping allow-all rule. README includes Console steps and Rules Playground checks. No CLI install is needed.
 7. Create the DhobiGhatTests XCTest target with DhobiGhat as host; add WeatherServiceTests, DryingRecommendationTests, and LaundryPlanTests only to that target, then Product > Test.
 8. Build/run every README auth/weather/recommendation/Firestore check. Verify Save, reopen/retrieve, complete, delete, Console field types, A/B account separation, denied cross-account rules, permission failure, network loss, and pending-write behavior. Record actual outcomes and errors.
+9. Run the Phase 6 flow matrix on the smallest available iPhone Simulator in portrait/landscape, with software keyboard, long note/email, large Dynamic Type, and light/dark appearance. Check Save -> sheet dismissal -> My Plans, failed Save, pending-write Cancel with no later tab jump, refresh/retry controls, all independent plan buttons, and logout/login cleanup.
 
 Before marking native Phase 0 checks complete, record:
 
@@ -224,9 +259,10 @@ Before marking native Phase 0 checks complete, record:
 - Resolved Firebase SDK version and the two linked products.
 - Firestore database/project selection, rule publication result, and Rules Playground owner/non-owner/anonymous results.
 - Build result, launch result, XCTest result, and each live auth/weather app test result, including errors.
+- Phase 6 small-device/layout/keyboard results and all four integrated flows, with runtime versions and actual findings.
 
 ## Next implementation steps
 
 1. Finish the manual native/SPM/Firebase setup and verification above when a Mac is available.
-2. Stop after Phase 5 and wait for the next explicit phase instruction.
+2. Stop after Phase 6 and wait for the next explicit phase instruction.
 3. Before the next phase, inspect existing files and reread this progress record. Keep code beginner-friendly, use the requested MVVM/state ownership, and preserve real working functionality.

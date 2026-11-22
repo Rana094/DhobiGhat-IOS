@@ -5,8 +5,14 @@ struct AddPlanView: View {
     let forecastDates: [String]
     @Binding var selectedDate: String
     @ObservedObject var plans: PlanViewModel
+    let onSaved: () -> Void
     @State private var note = ""
+    @State private var isVisible = true
     @Environment(\.dismiss) private var dismiss
+
+    private var hasValidDate: Bool {
+        forecastDates.contains(selectedDate) && LaundryPlan.isValidDate(selectedDate)
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,6 +28,11 @@ struct AddPlanView: View {
                         }
                     }
                     .disabled(plans.isSaving)
+
+                    if !hasValidDate {
+                        Text("Choose a valid date from the current forecast.")
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 Section("Optional note") {
@@ -47,28 +58,43 @@ struct AddPlanView: View {
                 }
 
                 Section {
-                    Button("Save plan") {
+                    Button {
                         Task {
-                            guard forecastDates.contains(selectedDate) else { return }
+                            guard hasValidDate else { return }
                             let saved = await plans.addPlan(city: city, date: selectedDate, note: note)
-                            if saved {
+                            if saved && isVisible {
+                                onSaved()
                                 dismiss()
                             }
                         }
+                    } label: {
+                        Label(plans.isSaving ? "Saving plan…" : "Save plan", systemImage: "checkmark")
+                            .frame(maxWidth: .infinity)
                     }
-                    .disabled(plans.isLoading || !forecastDates.contains(selectedDate))
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(plans.isLoading || !hasValidDate)
                 }
             }
             .navigationTitle("Plan Laundry")
+            .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
+            .scrollContentBackground(.hidden)
+            .background(Color.blue.opacity(0.06))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        isVisible = false
                         dismiss()
                     }
                 }
             }
             .onAppear {
+                isVisible = true
                 plans.errorMessage = nil
+            }
+            .onDisappear {
+                isVisible = false
             }
         }
     }

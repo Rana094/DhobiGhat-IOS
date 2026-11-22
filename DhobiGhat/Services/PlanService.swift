@@ -13,7 +13,7 @@ struct PlanService {
         let data: [String: Any] = [
             "city": city,
             "date": date,
-            "note": note,
+            "note": note.trimmingCharacters(in: .whitespacesAndNewlines),
             "isCompleted": false,
             "createdAt": FieldValue.serverTimestamp()
         ]

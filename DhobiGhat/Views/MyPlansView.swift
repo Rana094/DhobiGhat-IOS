@@ -35,42 +35,63 @@ struct MyPlansView: View {
                 }
 
                 ForEach(plans.plans) { plan in
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(plan.city)
-                            .font(.headline)
-                        Label(plan.date, systemImage: "calendar")
-                        if !plan.note.isEmpty {
-                            Text(plan.note)
-                                .foregroundStyle(.secondary)
-                        }
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(plan.city)
+                                .font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Label(plan.date, systemImage: "calendar")
+                            if !plan.note.isEmpty {
+                                Text(plan.note)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
 
-                        if plan.isCompleted {
-                            Label("Completed", systemImage: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                        } else {
-                            Label("Pending", systemImage: "clock")
-                                .foregroundStyle(.orange)
-                        }
+                            if plan.isCompleted {
+                                Label("Completed", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            } else {
+                                Label("Pending", systemImage: "clock")
+                                    .foregroundStyle(.orange)
+                            }
 
-                        HStack {
-                            if !plan.isCompleted {
-                                Button("Mark completed") {
-                                    Task { await plans.completePlan(plan) }
+                            VStack(alignment: .leading, spacing: 12) {
+                                if !plan.isCompleted {
+                                    Button {
+                                        Task { await plans.completePlan(plan) }
+                                    } label: {
+                                        Label("Mark completed", systemImage: "checkmark.circle")
+                                    }
+                                }
+                                Button(role: .destructive) {
+                                    planToDelete = plan
+                                    showDeleteAlert = true
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
                                 }
                             }
-                            Spacer()
-                            Button("Delete", role: .destructive) {
-                                planToDelete = plan
-                                showDeleteAlert = true
-                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
+                            .disabled(plans.isLoading)
                         }
-                        .buttonStyle(.borderless)
-                        .disabled(plans.isLoading)
+                        .padding(.vertical, 6)
                     }
-                    .padding(.vertical, 6)
                 }
             }
             .navigationTitle("My Plans")
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(Color.blue.opacity(0.06))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await plans.fetchPlans() }
+                    } label: {
+                        Label("Refresh plans", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(plans.isLoading)
+                }
+            }
             .refreshable {
                 await plans.fetchPlans()
             }

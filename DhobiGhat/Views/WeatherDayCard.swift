@@ -24,6 +24,7 @@ struct WeatherDayCard: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     Label(day.date, systemImage: "calendar")
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     if selectedDate == day.date {
                         Image(systemName: "checkmark.circle.fill")
@@ -39,18 +40,20 @@ struct WeatherDayCard: View {
 
                 HStack {
                     Text("Drying outlook")
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
                     Text(day.dryingRecommendation()?.rawValue ?? "Unavailable")
                         .fontWeight(.semibold)
                         .foregroundStyle(recommendationColor)
+                        .fixedSize(horizontal: false, vertical: true)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(recommendationColor.opacity(0.12), in: Capsule())
+                        .background(recommendationColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                 }
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
             .overlay {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(selectedDate == day.date ? Color.blue : Color.clear, lineWidth: 2)
@@ -68,11 +71,8 @@ private struct WeatherValueRow: View {
     let value: Double?
     let unit: String
 
-    var body: some View {
-        HStack {
-            Label(title, systemImage: symbol)
-            Spacer()
-
+    private var valueText: some View {
+        Group {
             if let value {
                 Text("\(value, specifier: "%.1f") \(unit)")
                     .monospacedDigit()
@@ -80,7 +80,24 @@ private struct WeatherValueRow: View {
                 Text("Unavailable")
             }
         }
+        .foregroundStyle(Color.primary)
+    }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                Label(title, systemImage: symbol)
+                    .fixedSize()
+                Spacer(minLength: 0)
+                valueText.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Label(title, systemImage: symbol)
+                valueText
+            }
+        }
         .font(.subheadline)
         .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

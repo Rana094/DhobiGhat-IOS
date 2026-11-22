@@ -1,8 +1,10 @@
 # DhobiGhat Viva Notes
 
-## Phase 5: what is implemented
+## Phase 6: what is implemented
 
 Nineteen app Swift files now describe authentication, weather, recommendations, and Firestore laundry schedules. MainTabView owns a shared PlanViewModel; AddPlanView saves; MyPlansView fetches, completes, and deletes plans. A firestore.rules policy is supplied. Native Xcode/SPM/Firebase setup, rule publication, build, and live app tests remain pending on a Mac. The earlier weather probes do not verify Swift code. Twenty-one XCTest methods across three files are prepared but unexecuted. Phase 1 was not present; later phases were explicitly requested.
+
+Phase 6 adds confirmed-save navigation to My Plans, adaptive native layouts, refresh controls, keyboard/loading feedback, early date validation, and note-edge trimming. ViewModel ownership and real integrations remain unchanged. No simulator or live-service verification is claimed.
 
 ## Current app flow and important code
 
@@ -23,7 +25,7 @@ The table separates current uses from wrappers/features still planned.
 
 | Concept | Meaning | Current or planned meaningful use |
 | --- | --- | --- |
-| `@State` | View-owned local UI state that can trigger a refresh | Login inputs/mode; WeatherHomeView's Retry count, selectedDate, and sheet visibility; AddPlanView's unsaved note |
+| `@State` | View-owned local UI state that can trigger a refresh | Login inputs/mode; MainTabView selected tab; weather retry/date/sheet/save-result state; form note/visibility; delete confirmation |
 | `@Binding` | Read/write access to state owned elsewhere | WeatherHomeView changes its parent's city; WeatherDayCard and AddPlanView change WeatherHomeView's selectedDate |
 | `ObservableObject` | Protocol for reference types that notify SwiftUI about changes | AuthViewModel, WeatherViewModel, and PlanViewModel import Combine |
 | `@Published` | Publishes changes to properties of an observable object | Auth/weather properties plus plans, loading, saving, and plan errors |
@@ -204,6 +206,42 @@ Firebase Console administrator editing bypasses these client rules; seeing a doc
 Tests/LaundryPlanTests.swift adds seven non-network XCTest methods covering all five data fields plus ID, empty note/completed status, missing fields, wrong types, strict dates/leap years, unsupported city/empty ID, and invalid stored date. All three test files are prepared but unexecuted. Live Save/reopen/retrieve/complete/delete, Console verification, account isolation, permission denial, and network states are all pending. No database action is reported successful from source inspection.
 
 Official references: [Firestore writes](https://firebase.google.com/docs/firestore/manage-data/add-data), [one-time queries](https://firebase.google.com/docs/reference/swift/firebasefirestore/api/reference/Classes/Query), [document write completion](https://firebase.google.com/docs/reference/swift/firebasefirestore/api/reference/Classes/DocumentReference), and [rule field validation](https://firebase.google.com/docs/firestore/security/rules-fields).
+
+## Phase 6 integration and UI explanations
+
+### How confirmed Save reaches My Plans
+
+MainTabView owns `selectedTab` with @State. Its TabView selection binding uses the same String tags as the three children. The small onPlanSaved callback changes that parent state to `plans`; it does not create another plan model or navigation stack.
+
+AddPlanView has an onSaved action, similar to a Button action. It runs only after PlanViewModel returns an acknowledged save and the form's local isVisible flag is still true. WeatherHomeView records that result in didSavePlan. Its sheet onDismiss then calls the parent action, after the presentation has closed. This avoids switching away from the presenting tab while its sheet is still dismissing.
+
+Cancel and onDisappear make isVisible false. A queued SDK write can still finish, but the closed form no longer sends a navigation action. A local visibility Boolean is UI state; it is unrelated to authentication, which continues to use the actual Firebase User.
+
+### What changed for small screens
+
+- ViewThatFits(in: .horizontal) tries the compact horizontal weather row first. Fixed ideal label/value sizes stop the first option from hiding text by squeezing it. When the row does not fit, the second option is a VStack. Its views are stateless and share a small valueText computed view, not another ViewModel.
+- fixedSize(horizontal: false, vertical: true) allows vertical growth for notes, email, dates, and recommendation text while respecting the available width.
+- My Plans uses native inset-grouped sections as cards. Mark completed and Delete stack vertically so large labels do not compete for one narrow row. Bordered button style gives each action a clear native hit area.
+- UIColor's secondarySystemGroupedBackground through SwiftUI Color provides a native card background that adapts to appearance. This fixes the hardcoded white-card/automatic-text-color contrast problem without forcing a global color scheme or adding a styling abstraction.
+- Login and Add Plan use scrollDismissesKeyboard(.interactively). The form remains scrollable above the software keyboard. The plan sheet title is inline to leave more vertical space.
+
+These APIs/layout choices were reviewed in source. Their actual rendering and touch targets still require the small-iPhone/Dynamic Type procedure in README.
+
+### Validation, loading, and existing safeguards
+
+The password Go action and login button use the same submit() function and the same AuthViewModel guard/validation. Action-specific loading text explains whether registration or login is waiting. No password trimming or custom credential storage was added.
+
+Date validity is checked at the Weather button, the form button/action, and again at the service boundary. It must be one of the loaded forecast dates and pass the existing strict calendar helper. PlanService trims note edges before writing; a whitespace-only optional note becomes the existing empty-String representation.
+
+Weather and plan refresh buttons invoke existing request functions, with the relevant busy guards. A progress indicator explains why planning is blocked during a plan operation. No new fetch service, listener, architecture, or package was introduced.
+
+The ownership audit found exactly one auth instance in RootView, one weather instance in WeatherHomeView, and one plan instance in MainTabView. Root's environmentObject supplies auth to its readers, while the shared plan instance is passed explicitly as ObservedObject. User-specific clearing, request/account tokens, and AppStorage's city preference remain as previously implemented. Source inspection found no hardcoded forecast or plan fixtures in production views.
+
+### What is still unverified
+
+The four user flows, every button, small-screen/keyboard/appearance behavior, @Published-driven UI changes, city persistence, session restoration, and account isolation require an actual configured app run. Swift/Xcode/Simulator and Firebase configuration are unavailable here. No runtime pass is inferred from source wiring. README contains the final manual check matrix; all 21 existing unit methods remain unexecuted.
+
+Apple references: [ViewThatFits](https://developer.apple.com/documentation/swiftui/viewthatfits) and [scrollDismissesKeyboard](https://developer.apple.com/documentation/swiftui/view/scrolldismisseskeyboard(_:)).
 
 ## Common viva questions
 

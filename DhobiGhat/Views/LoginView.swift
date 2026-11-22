@@ -35,6 +35,8 @@ struct LoginView: View {
 
                     SecureField("Password", text: $password)
                         .textContentType(isRegistering ? .newPassword : .password)
+                        .submitLabel(.go)
+                        .onSubmit { submit() }
 
                     if isRegistering {
                         Text("Use at least 6 characters for your password.")
@@ -52,21 +54,17 @@ struct LoginView: View {
 
                 Section {
                     Button {
-                        Task {
-                            if isRegistering {
-                                await auth.register(email: email, password: password)
-                            } else {
-                                await auth.login(email: email, password: password)
-                            }
-                        }
+                        submit()
                     } label: {
                         HStack {
                             Spacer()
                             if auth.isLoading {
                                 ProgressView()
+                                Text(isRegistering ? "Creating account…" : "Logging in…")
+                            } else {
+                                Text(isRegistering ? "Create account" : "Log in")
+                                    .fontWeight(.semibold)
                             }
-                            Text(isRegistering ? "Create account" : "Log in")
-                                .fontWeight(.semibold)
                             Spacer()
                         }
                     }
@@ -81,9 +79,21 @@ struct LoginView: View {
                 }
             }
             .disabled(auth.isLoading)
+            .scrollDismissesKeyboard(.interactively)
             .scrollContentBackground(.hidden)
             .background(Color.blue.opacity(0.06))
             .navigationTitle("DhobiGhat")
+        }
+    }
+
+    private func submit() {
+        guard !auth.isLoading else { return }
+        Task {
+            if isRegistering {
+                await auth.register(email: email, password: password)
+            } else {
+                await auth.login(email: email, password: password)
+            }
         }
     }
 }
